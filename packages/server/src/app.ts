@@ -200,10 +200,11 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       const res = reply.raw;
       let open = false;
       const send = (event: string, data: unknown) => {
-        if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        if (!res.writableEnded && !res.destroyed)
+          res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       };
       const heartbeat = setInterval(() => {
-        if (open && !res.writableEnded) res.write(': keepalive\n\n');
+        if (open && !res.writableEnded && !res.destroyed) res.write(': keepalive\n\n');
       }, 15_000);
       try {
         await runRepair(req.body, reply, (e) => {
