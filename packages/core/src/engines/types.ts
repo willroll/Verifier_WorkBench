@@ -30,6 +30,8 @@ export interface FunctionInfo {
   name: string;
   line: number;
   signature?: string;
+  /** Canonical type (parameter names and typedef spellings removed), for "same signature" checks. */
+  typeKey?: string;
   /** Obligations located in this function. */
   obligations: Obligation[];
 }

@@ -106,7 +106,7 @@ interface CbmcLocation {
   line?: string | number;
   column?: string | number;
 }
-interface CbmcValue {
+export interface CbmcValue {
   data?: string;
   name?: string;
   binary?: string;
@@ -137,15 +137,19 @@ interface CbmcProperty {
   description?: string;
   sourceLocation?: CbmcLocation;
 }
-interface CbmcIrep {
+export interface CbmcIrep {
   id?: string;
+  sub?: CbmcIrep[];
   namedSub?: Record<string, CbmcIrep>;
 }
-interface CbmcSymbol {
+export interface CbmcSymbol {
   name?: string;
+  baseName?: string;
   prettyType?: string;
+  prettyValue?: string;
   mode?: string;
   isType?: boolean;
+  isStaticLifetime?: boolean;
   type?: CbmcIrep;
   value?: CbmcIrep;
   location?: CbmcIrep;
@@ -196,7 +200,27 @@ export function cbmcDiagnostics(msgs: CbmcMessage[]): Diagnostic[] {
   return out;
 }
 
-const irep = (node: CbmcIrep | undefined, field: string) => node?.namedSub?.[field]?.id;
+export const irep = (node: CbmcIrep | undefined, field: string) => node?.namedSub?.[field]?.id;
+
+/**
+ * Structural identity of a type: CBMC's irep with its '#' annotations
+ * (parameter names, typedef names, source locations) removed. Renaming a
+ * parameter keeps the key; changing a type changes it.
+ */
+export function canonicalType(node: CbmcIrep | undefined): string {
+  const strip = (n: CbmcIrep | undefined): unknown => {
+    if (!n) return null;
+    const out: Record<string, unknown> = {};
+    if (n.id) out.id = n.id;
+    if (n.sub?.length) out.sub = n.sub.map(strip);
+    const named = Object.keys(n.namedSub ?? {})
+      .filter((k) => !k.startsWith('#'))
+      .sort();
+    if (named.length) out.namedSub = Object.fromEntries(named.map((k) => [k, strip(n.namedSub![k])]));
+    return out;
+  };
+  return JSON.stringify(strip(node));
+}
 
 /** "int32_t (int32_t a, int32_t b)" + "avg" -> "int32_t avg(int32_t a, int32_t b)" */
 export function signatureFrom(prettyType: string | undefined, name: string): string | undefined {
@@ -226,6 +250,7 @@ export function cbmcFunctions(msgs: CbmcMessage[], fileName: string): FunctionIn
       name: sym.name,
       line: Number(irep(sym.location, 'line') ?? 0),
       obligations: [],
+      typeKey: canonicalType(sym.type),
     };
     const signature = signatureFrom(sym.prettyType, sym.name);
     if (signature) info.signature = signature;
@@ -260,7 +285,7 @@ export function cbmcSolverSeen(msgs: CbmcMessage[]): SolverSeen | undefined {
 
 // ---- Counterexamples ---------------------------------------------------------
 
-function formatValue(v: CbmcValue | undefined, depth = 0): string {
+export function formatValue(v: CbmcValue | undefined, depth = 0): string {
   if (!v) return '?';
   // CBMC prints integers as C literals ("14ul"); the type is reported separately.
   if (v.data !== undefined) return v.data.replace(/^(-?\d+)(?:[uU]?[lL]{0,2}|[lL]{1,2}[uU])$/, '$1');

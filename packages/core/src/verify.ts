@@ -195,20 +195,36 @@ export async function verify(
   deps: VerifierDeps,
   onProgress?: (e: ProgressEvent) => void,
 ): Promise<VerifyResult> {
+  return (await verifyDetailed(req, deps, onProgress)).result;
+}
+
+export interface DetailedVerification {
+  result: VerifyResult;
+  /** Every function the engine found in the file (not only the verified subset), with type keys. */
+  functions: FunctionInfo[];
+}
+
+/** verify(), plus the engine's per-function analysis (used by the repair guards). */
+export async function verifyDetailed(
+  req: VerifyRequest,
+  deps: VerifierDeps,
+  onProgress?: (e: ProgressEvent) => void,
+): Promise<DetailedVerification> {
   const started = Date.now();
   const r = await resolve(req, deps);
   const base = () => baseResult(r, started);
+  const none = (result: VerifyResult): DetailedVerification => ({ result, functions: [] });
 
   if (!r.info.available) {
-    return {
+    return none({
       ...base(),
       error: `${deps.config.bins[r.engine]} not found on this host`,
       hint: `Install ${r.info.label}, or set ${r.engine.toUpperCase()}_BIN`,
-    };
+    });
   }
   const includeProblems = checkIncludes(req.code);
   if (includeProblems.length) {
-    return { ...base(), diagnostics: includeProblems, error: includeProblems[0]!.message };
+    return none({ ...base(), diagnostics: includeProblems, error: includeProblems[0]!.message });
   }
 
   return withWorkspace(async (dir) => {
@@ -231,10 +247,15 @@ export async function verify(
       analysis = await adapter.analyze(ctx);
     } catch (e) {
       if (!(e instanceof EngineError)) throw e;
-      return { ...base(), error: e.message, raw: joinLog(ctx.log) };
+      return none({ ...base(), error: e.message, raw: joinLog(ctx.log) });
     }
     if (analysis.error) {
-      return { ...base(), diagnostics: analysis.diagnostics, error: analysis.error, raw: joinLog(ctx.log) };
+      return none({
+        ...base(),
+        diagnostics: analysis.diagnostics,
+        error: analysis.error,
+        raw: joinLog(ctx.log),
+      });
     }
 
     let targets = analysis.functions;
@@ -245,16 +266,22 @@ export async function verify(
     }
     if (targets.length === 0) {
       return {
-        ...base(),
-        diagnostics: analysis.diagnostics,
-        error: `no function definitions found in ${r.fileName}`,
+        result: {
+          ...base(),
+          diagnostics: analysis.diagnostics,
+          error: `no function definitions found in ${r.fileName}`,
+        },
+        functions: analysis.functions,
       };
     }
     if (targets.length > deps.config.maxFunctions) {
       return {
-        ...base(),
-        diagnostics: analysis.diagnostics,
-        error: `${targets.length} functions exceed the limit of ${deps.config.maxFunctions} per run; pass "functions" to verify a subset`,
+        result: {
+          ...base(),
+          diagnostics: analysis.diagnostics,
+          error: `${targets.length} functions exceed the limit of ${deps.config.maxFunctions} per run; pass "functions" to verify a subset`,
+        },
+        functions: analysis.functions,
       };
     }
     onProgress?.({ type: 'analyzed', functions: targets.map((f) => f.name) });
@@ -312,7 +339,7 @@ export async function verify(
     };
     if (status === 'error' || status === 'timeout')
       result.error = checked.find((f) => f.error)?.error ?? 'verification failed';
-    return result;
+    return { result, functions: analysis.functions };
   });
 }
 

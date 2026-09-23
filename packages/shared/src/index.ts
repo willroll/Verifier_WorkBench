@@ -185,11 +185,74 @@ export interface EnginesResponse {
   limits: { maxUnwind: number; defaultUnwind: number; maxCodeBytes: number };
 }
 
+// ---- Verified repair -------------------------------------------------------
+
+export const PROVIDER_IDS = ['anthropic', 'openai', 'gemini', 'custom'] as const;
+export type ProviderId = (typeof PROVIDER_IDS)[number];
+
+export interface ProviderInfo {
+  id: ProviderId;
+  label: string;
+  /** False when its API key (or base URL) is not set on the server. */
+  configured: boolean;
+  model: string | null;
+  /** Environment variable that would configure it, when not configured. */
+  missing?: string;
+}
+
+export interface ProvidersResponse {
+  default: ProviderId;
+  providers: ProviderInfo[];
+}
+
 export type RepairStatus = 'repaired' | 'unrepaired' | 'already-proved' | 'error';
+
+export interface RepairRequest extends Omit<VerifyRequest, 'functions'> {
+  provider?: ProviderId;
+  /** Repair attempts before giving up (the server sets the default and the limit, 3 unless configured). */
+  maxIters?: number;
+}
 
 export interface DiffLine {
   type: '+' | '-' | ' ' | '@';
   text: string;
+}
+
+/** Why a candidate patch was refused before it could count. */
+export type GuardId =
+  | 'unchanged'
+  | 'empty'
+  | 'includes'
+  | 'verifier-intrinsics'
+  | 'assertions'
+  | 'termination'
+  | 'does-not-compile'
+  | 'signature'
+  | 'globals'
+  | 'inconclusive'
+  | 'obligations'
+  | 'behavior';
+
+export interface Rejection {
+  guard: GuardId;
+  message: string;
+}
+
+/**
+ * Whether a changed function still computes what the original computed,
+ * proved by the model checker on every input where the original has no
+ * undefined behavior (return value and global state).
+ */
+export interface EquivalenceResult {
+  function: string;
+  status: 'equivalent' | 'different' | 'inconclusive' | 'skipped';
+  /** Why it was skipped or inconclusive, or what differs. */
+  reason?: string;
+  /** For 'different': the inputs that show it. */
+  inputs?: WitnessValue[];
+  /** For 'different': what each version produced (the return value, or the differing global or element). */
+  original?: string;
+  candidate?: string;
 }
 
 export interface RepairIteration {
@@ -202,6 +265,17 @@ export interface RepairIteration {
   rationale?: string;
   diff?: DiffLine[];
   error?: string;
+  /**
+   * baseline: the original. accepted: fully verified, becomes the result.
+   * improved: fewer refuted obligations, kept as the new baseline.
+   * no-progress: valid but not fewer refuted obligations. rejected: failed a guard.
+   * error: the model gave no usable answer.
+   */
+  outcome?: 'baseline' | 'accepted' | 'improved' | 'no-progress' | 'rejected' | 'error';
+  rejection?: Rejection;
+  equivalence?: EquivalenceResult[];
+  /** Why no behavior proof was attempted for this candidate (e.g. CBMC is not installed). */
+  equivalenceNote?: string;
 }
 
 export interface RepairResult {
@@ -213,5 +287,53 @@ export interface RepairResult {
   remaining?: number;
   engineLabel?: string;
   engineVersion?: string | null;
+  provider?: ProviderId;
+  model?: string;
+  /** Behavior-preservation evidence for the accepted patch. */
+  equivalence?: EquivalenceResult[];
+  equivalenceNote?: string;
+  /** Obligations of the final code still inconclusive (never more than the original had). */
+  inconclusive?: number;
   error?: string;
+}
+
+export type RepairEvent =
+  | { type: 'iteration'; iteration: RepairIteration }
+  | { type: 'proposing'; iter: number }
+  | { type: 'checking'; iter: number; step: 'guards' | 'verify' | 'equivalence' }
+  | { type: 'result'; result: RepairResult };
+
+// ---- Model proposals (the contract between the repair loop and providers) ----
+
+export interface ProposalRequest {
+  system: string;
+  /** Identical across attempts (the original source and its failures): cacheable. */
+  stable: string;
+  /** Attempt-specific feedback. */
+  attempt: string;
+  signal?: AbortSignal;
+}
+
+export type ProposalOutcome =
+  | { ok: true; code: string; rationale: string; model: string }
+  | {
+      ok: false;
+      /** config/auth/aborted stop the loop; the others count as a failed attempt. */
+      kind:
+        | 'config'
+        | 'auth'
+        | 'rate-limit'
+        | 'network'
+        | 'api'
+        | 'truncated'
+        | 'refused'
+        | 'invalid'
+        | 'aborted';
+      error: string;
+    };
+
+export interface Proposer {
+  provider: ProviderId;
+  model: string;
+  propose(req: ProposalRequest): Promise<ProposalOutcome>;
 }

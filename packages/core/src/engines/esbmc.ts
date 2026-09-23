@@ -189,6 +189,8 @@ export interface EsbmcFunction {
   line: number;
   /** Signature in ESBMC's canonical types, e.g. 'signed int avg(signed int a, signed int b)'. */
   signature?: string;
+  /** ESBMC's function type, e.g. 'signed int (signed int, signed int)': canonical, without names. */
+  typeKey: string;
   /** Null when the parameter types cannot be expressed in a harness. */
   params: EsbmcParam[] | null;
 }
@@ -223,7 +225,12 @@ export function esbmcFunctions(symbols: EsbmcSymbol[], fileName: string): EsbmcF
         return { type, local, display };
       });
     }
-    const fn: EsbmcFunction = { name, line: Number(loc[2]), params };
+    const fn: EsbmcFunction = {
+      name,
+      line: Number(loc[2]),
+      params,
+      typeKey: s.type.replace(/\s+/g, ' ').trim(),
+    };
     if (sig) {
       const shown = params ? params.map((p) => `${p.type} ${p.display}`) : sig.params;
       fn.signature = `${sig.ret} ${name}(${shown.join(', ') || 'void'})`;
@@ -604,6 +611,7 @@ export const esbmc: EngineAdapter = {
           name: f.name,
           line: f.line,
           obligations: [] as Obligation[],
+          typeKey: f.typeKey,
           ...(f.signature ? { signature: f.signature } : {}),
         },
       ]),

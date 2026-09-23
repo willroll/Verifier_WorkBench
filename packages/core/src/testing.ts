@@ -69,11 +69,21 @@ export class StaticDetector implements EngineDetector {
   }
 }
 
+// Brotli with a 16 MB window: a repair scenario verifies near-identical
+// sources many times, and the long window shares their symbol tables (a
+// sixth of gzip's size, whose 32 KB window cannot).
 export function saveRecording(file: string, recording: Recording): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, zlib.gzipSync(JSON.stringify(recording), { level: 9 }));
+  const json = Buffer.from(JSON.stringify(recording));
+  const { BROTLI_PARAM_QUALITY, BROTLI_PARAM_LGWIN, BROTLI_PARAM_SIZE_HINT } = zlib.constants;
+  fs.writeFileSync(
+    file,
+    zlib.brotliCompressSync(json, {
+      params: { [BROTLI_PARAM_QUALITY]: 11, [BROTLI_PARAM_LGWIN]: 24, [BROTLI_PARAM_SIZE_HINT]: json.length },
+    }),
+  );
 }
 
 export function loadRecording(file: string): Recording {
-  return JSON.parse(zlib.gunzipSync(fs.readFileSync(file)).toString('utf8')) as Recording;
+  return JSON.parse(zlib.brotliDecompressSync(fs.readFileSync(file)).toString('utf8')) as Recording;
 }

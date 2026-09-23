@@ -28,6 +28,8 @@ export interface CoreConfig {
   maxCodeBytes: number;
   /** Largest SMT-LIB export returned to a client. */
   maxSmtBytes: number;
+  /** Repair attempts per request: the default and the most a request may ask for. */
+  repairMaxIters: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -88,5 +90,6 @@ export function loadConfig(env: Env = process.env): CoreConfig {
     maxFunctions: int(env, 'VERIFY_MAX_FUNCTIONS', 64, 1, 10_000),
     maxCodeBytes: int(env, 'VERIFY_MAX_CODE_BYTES', 200 * 1024, 1024, 16 * 1024 * 1024),
     maxSmtBytes: int(env, 'VERIFY_MAX_SMT_BYTES', 8 * 1024 * 1024, 64 * 1024, 256 * 1024 * 1024),
+    repairMaxIters: int(env, 'REPAIR_MAX_ITERS', 3, 1, 10),
   };
 }
