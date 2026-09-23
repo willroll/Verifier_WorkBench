@@ -23,6 +23,9 @@ docker run --rm -p 3000:3000 verifier-workbench
 # open http://localhost:3000
 ```
 
+The image is `linux/amd64`, because ESBMC ships x86-64 binaries only. On
+Apple silicon, add `--platform linux/amd64` to both commands.
+
 **Local development** needs Node 22.12+ and at least one engine on `PATH`:
 
 - **CBMC:** `apt install cbmc` or `brew install cbmc`.

@@ -29,9 +29,11 @@ ARG ESBMC_VERSION=8.5
 ENV DEBIAN_FRONTEND=noninteractive
 
 # CBMC 5.95.1, Z3 and cvc5 from Ubuntu; ESBMC is a static release binary with
-# its solvers (Bitwuzla, Z3, cvc5, Boolector) linked in.
+# its solvers (Bitwuzla, Z3, cvc5, Boolector) linked in. CBMC preprocesses
+# with gcc, which only *recommends* libc6-dev: without it, #include <stdint.h>
+# fails, so it is installed explicitly.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl unzip cbmc z3 cvc5 \
+ && apt-get install -y --no-install-recommends ca-certificates curl unzip cbmc libc6-dev z3 cvc5 \
  && curl -fsSL -o /tmp/esbmc.zip "https://github.com/esbmc/esbmc/releases/download/v${ESBMC_VERSION}/esbmc-linux.zip" \
  && mkdir -p /opt/esbmc \
  && unzip -q /tmp/esbmc.zip -d /opt/esbmc \
@@ -40,7 +42,11 @@ RUN apt-get update \
  && apt-get purge -y curl unzip \
  && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* \
- && cbmc --version && esbmc --version && z3 --version && cvc5 --version
+ && cbmc --version && esbmc --version && z3 --version && cvc5 --version \
+ && printf '#include <stdint.h>\n#include <string.h>\nint32_t f(int32_t a) { return a; }\n' > /tmp/selftest.c \
+ && cbmc /tmp/selftest.c --function f > /dev/null \
+ && esbmc /tmp/selftest.c --function f > /dev/null \
+ && rm /tmp/selftest.c
 
 COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 

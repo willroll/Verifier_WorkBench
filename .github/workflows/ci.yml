@@ -70,8 +70,13 @@ jobs:
           code=$(jq -Rs . < packages/core/test/fixtures/c/arith.c)
           for engine in cbmc esbmc; do
             curl -fsS -X POST http://127.0.0.1:3000/api/verify -H 'content-type: application/json' \
-              -d "{\"code\": $code, \"fileName\": \"arith.c\", \"engine\": \"$engine\"}" \
-              | jq -e '.status == "refuted" and .counts.refuted == 2'
+              -d "{\"code\": $code, \"fileName\": \"arith.c\", \"engine\": \"$engine\"}" -o "verify-$engine.json"
+            if ! jq -e '.status == "refuted" and .counts.refuted == 2' "verify-$engine.json" > /dev/null; then
+              echo "::error::$engine did not refute both bugs in the sample"
+              jq '{status, counts, error, diagnostics, raw}' "verify-$engine.json"
+              exit 1
+            fi
+            jq -c '{engine, status, counts, solver: .solver.label}' "verify-$engine.json"
           done
           curl -fsS http://127.0.0.1:3000/ | grep -q 'window.verifier = {'
       - name: Container logs
