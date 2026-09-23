@@ -10,7 +10,13 @@ import type {
   VerifyResult,
 } from '@verifier/shared';
 import { safeFileName } from '../source';
-import { RequestError, verifyDetailed, type DetailedVerification, type VerifierDeps } from '../verify';
+import {
+  RequestError,
+  validateRequest,
+  verifyDetailed,
+  type DetailedVerification,
+  type VerifierDeps,
+} from '../verify';
 import { patchOf } from './diff';
 import { checkEquivalence } from './equivalence';
 import {
@@ -77,6 +83,8 @@ export async function repair(
     unwind: req.unwind,
     checks: req.checks,
   };
+  // Reject a bad request before the first event, so a stream can still answer 400.
+  await validateRequest({ ...settings, code: req.code }, deps);
   const emit = (e: RepairEvent) => opts.onEvent?.(e);
   const iterations: RepairIteration[] = [];
   const record = (it: RepairIteration) => {

@@ -381,7 +381,16 @@ export async function checkEquivalence(
       const missing =
         (err?.line !== undefined ? globalNames[err.line - firstUse] : undefined) ??
         globalNames.find((g) => err?.message.includes(`'${g}'`));
-      if (!missing) return { results: [], unavailable: 'CBMC could not read the candidate' };
+      if (!missing) {
+        // CBMC read the original, so whatever it cannot read now came with the patch.
+        return {
+          results: [],
+          rejection: {
+            guard: 'behavior',
+            message: `The behavior check could not read the patched code: ${err?.message ?? 'CBMC failed'}.`,
+          },
+        };
+      }
       return {
         results: [],
         rejection: {
@@ -504,28 +513,44 @@ export async function checkEquivalence(
     await fs.writeFile(path.join(dir, 'termination.c'), TERMINATION_TU);
 
     const checkFlags = opts.checks.map((c) => CHECK_FLAGS[c]);
-    const steps: [string, string[], string][] = [
-      [sibling('goto-cc'), ['-I', '../shim', opts.fileName, '-o', '../o.gb'], path.join(dir, 'o')],
-      // One pass: the check flags and --assert-to-assume together instrument the
-      // original's checks as assumptions (a separate pass only converts user asserts).
-      [sibling('goto-instrument'), ['o.gb', 'o-assumed.gb', ...checkFlags, '--assert-to-assume'], dir],
-      [sibling('goto-cc'), [opts.fileName, '-o', '../c.gb'], path.join(dir, 'c')],
-      [sibling('goto-cc'), ['termination.c', '-o', 'termination.gb'], dir],
-      [sibling('goto-cc'), ['o-assumed.gb', 'c.gb', 'termination.gb', '-o', 'eq.gb'], dir],
+    // [tool, args, cwd, whether a failure can only come from the patched code]
+    const steps: [string, string[], string, boolean][] = [
+      [sibling('goto-cc'), ['-I', '../shim', opts.fileName, '-o', '../o.gb'], path.join(dir, 'o'), false],
+      // One pass: the check flags and --assert-to-assume together turn the
+      // original's checks into assumptions (its own asserts are handled by the shim).
+      [sibling('goto-instrument'), ['o.gb', 'o-assumed.gb', ...checkFlags, '--assert-to-assume'], dir, false],
+      [sibling('goto-cc'), [opts.fileName, '-o', '../c.gb'], path.join(dir, 'c'), true],
+      [sibling('goto-cc'), ['termination.c', '-o', 'termination.gb'], dir, false],
+      [sibling('goto-cc'), ['o-assumed.gb', 'c.gb', 'termination.gb', '-o', 'eq.gb'], dir, true],
     ];
-    for (const [bin, args, cwd] of steps) {
+    for (const [bin, args, cwd, fromPatch] of steps) {
       const r = await run(bin, args, cwd);
-      if (r.spawnError || r.code !== 0) {
-        const why =
-          r.spawnError ?? (r.stderr || r.stdout).trim().split('\n').slice(-1)[0] ?? `exit ${r.code}`;
-        const reason = `could not build the behavior check (${path.basename(bin)}: ${why})`;
+      if (!r.spawnError && r.code === 0) continue;
+      const tool = path.basename(bin);
+      if (r.spawnError) {
         return {
-          results: ordered([
-            ...results,
-            ...targets.map((f): EquivalenceResult => ({ function: f.name, status: 'skipped', reason })),
-          ]),
+          results: ordered(results),
+          unavailable: `the behavior check could not run ${tool}: ${r.spawnError}`,
         };
       }
+      const why = (r.stderr || r.stdout).trim().split('\n').slice(-1)[0] || `exit ${r.code}`;
+      if (fromPatch) {
+        // A patch must not escape the proof by breaking it.
+        return {
+          results: ordered(results),
+          rejection: {
+            guard: 'behavior',
+            message: `The behavior check could not be built with the patched code (${tool}: ${why}).`,
+          },
+        };
+      }
+      const reason = `could not build the behavior check (${tool}: ${why})`;
+      return {
+        results: ordered([
+          ...results,
+          ...targets.map((f): EquivalenceResult => ({ function: f.name, status: 'skipped', reason })),
+        ]),
+      };
     }
 
     // 4. Prove each changed function.

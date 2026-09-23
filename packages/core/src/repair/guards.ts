@@ -2,9 +2,12 @@ import type { EquivalenceResult, FunctionSummary, Rejection, VerifyResult } from
 import type { FunctionInfo } from '../engines/types';
 import { checkIncludes } from '../source';
 import {
+  RESERVED_WORDS,
   added,
   assertionConditions,
   assertionMacros,
+  identifiers,
+  macroDirectives,
   removed,
   terminatingCalls,
   verifierConstructs,
@@ -38,8 +41,8 @@ export function sourceGuards(original: string, candidate: string, baseline: stri
     return {
       guard: 'verifier-intrinsics',
       message:
-        `The patch adds verifier-specific code (${quoteList(constructs)}). That changes what the ` +
-        'checker assumes, not what the program does; fix the code itself.',
+        `The patch adds verifier-specific or opaque code (${quoteList(constructs)}). That changes what ` +
+        'the checker assumes or can see, not what the program does; fix the code itself.',
     };
   }
   const macros = added(assertionMacros(original), assertionMacros(candidate));
@@ -47,6 +50,20 @@ export function sourceGuards(original: string, candidate: string, baseline: stri
     return {
       guard: 'assertions',
       message: `The patch adds ${quoteList(macros)}, which would switch assertions off; keep every assertion in force.`,
+    };
+  }
+  // A macro that redefines an existing name or a keyword can change what the
+  // checker's own generated code means (the behavior proof compiles after the patch).
+  const known = identifiers(original);
+  const redefined = added(macroDirectives(original), macroDirectives(candidate)).filter(
+    (name) => known.has(name) || RESERVED_WORDS.has(name),
+  );
+  if (redefined.length) {
+    return {
+      guard: 'macros',
+      message:
+        `The patch redefines ${quoteList(redefined)} with a macro. A patch may add new macros, but not ` +
+        'redefine names the code already uses, or keywords.',
     };
   }
   const asserts = removed(assertionConditions(original), assertionConditions(candidate));
@@ -146,16 +163,31 @@ export function obligationsGuard(
   return null;
 }
 
-/** The first behavior difference, as a rejection. */
+/**
+ * The first behavior difference, as a rejection. A proof that did not finish
+ * rejects too: a patch that is too hard to check must not pass for that reason.
+ */
 export function behaviorRejection(equivalence: EquivalenceResult[]): Rejection | null {
   const d = equivalence.find((e) => e.status === 'different');
-  if (!d) return null;
-  const args = (d.inputs ?? []).map((i) => `${i.name} = ${i.value}`).join(', ');
-  const values = d.original !== undefined ? ` (original: ${d.original}, patched: ${d.candidate ?? '?'})` : '';
-  return {
-    guard: 'behavior',
-    message:
-      `\`${d.function}(${args})\` is well-defined in the original, but ${d.reason ?? 'the behavior differs'}` +
-      `${values}. Change behavior only on inputs where the original has undefined behavior or fails an assertion.`,
-  };
+  if (d) {
+    const args = (d.inputs ?? []).map((i) => `${i.name} = ${i.value}`).join(', ');
+    const values =
+      d.original !== undefined ? ` (original: ${d.original}, patched: ${d.candidate ?? '?'})` : '';
+    return {
+      guard: 'behavior',
+      message:
+        `\`${d.function}(${args})\` is well-defined in the original, but ${d.reason ?? 'the behavior differs'}` +
+        `${values}. Change behavior only on inputs where the original has undefined behavior or fails an assertion.`,
+    };
+  }
+  const u = equivalence.find((e) => e.status === 'inconclusive');
+  if (u) {
+    return {
+      guard: 'behavior',
+      message:
+        `The proof that \`${u.function}\` behaves as before did not finish (${u.reason ?? 'undecided'}). ` +
+        'Keep the change small and the loops bounded; the operator can raise the unwinding bound or the timeout.',
+    };
+  }
+  return null;
 }

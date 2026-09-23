@@ -224,6 +224,7 @@ export type GuardId =
   | 'empty'
   | 'includes'
   | 'verifier-intrinsics'
+  | 'macros'
   | 'assertions'
   | 'termination'
   | 'does-not-compile'

@@ -9,6 +9,8 @@ export interface ServerConfig {
   /** Prototype UI file to serve at /, or null to serve the API only. */
   uiHtml: string | null;
   logLevel: string;
+  /** Repairs allowed to run at once; each one spends model tokens. Further requests get 429. */
+  repairConcurrency: number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -26,6 +28,10 @@ export function loadServerConfig(env: Env = process.env, cwd = process.cwd()): S
   if (!Number.isInteger(bodyLimit) || bodyLimit < 1024)
     throw new Error('BODY_LIMIT_BYTES must be an integer >= 1024');
 
+  const repairConcurrency = Number(env.REPAIR_CONCURRENCY ?? 2);
+  if (!Number.isInteger(repairConcurrency) || repairConcurrency < 1 || repairConcurrency > 64)
+    throw new Error('REPAIR_CONCURRENCY must be an integer from 1 to 64');
+
   let uiHtml: string | null;
   if (env.UI_HTML !== undefined) {
     uiHtml = env.UI_HTML.trim() ? path.resolve(cwd, env.UI_HTML) : null;
@@ -40,5 +46,6 @@ export function loadServerConfig(env: Env = process.env, cwd = process.cwd()): S
     bodyLimit,
     uiHtml,
     logLevel: env.LOG_LEVEL ?? 'info',
+    repairConcurrency,
   };
 }

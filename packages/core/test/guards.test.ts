@@ -125,6 +125,29 @@ describe('source guards', () => {
     expect(sourceGuards(withIntrinsic, withIntrinsic.replace('a + 1', 'a + 2'), withIntrinsic)).toBeNull();
   });
 
+  it('rejects pragmas in any form and inline assembly', () => {
+    expect(guard(patch('return', '_Pragma("CPROVER check disable \\"signed-overflow\\"")\n    return'))).toBe(
+      'verifier-intrinsics',
+    );
+    expect(guard(patch('return a + 1;', 'int r; __asm__("" : "=r"(r)); return r;'))).toBe(
+      'verifier-intrinsics',
+    );
+  });
+
+  it('rejects macros that redefine existing names or keywords, but allows new ones', () => {
+    const withMacro = (line: string) => `${ORIGINAL}${line}\n`;
+    const r = sourceGuards(ORIGINAL, withMacro('#define f(x) 0'), ORIGINAL);
+    expect(r?.guard).toBe('macros');
+    expect(r?.message).toMatch(/redefines `f` with a macro/);
+    expect(guard(withMacro('#define sizeof(x) 0'))).toBe('macros');
+    expect(guard(withMacro('#  undef __typeof__'))).toBe('macros');
+    expect(
+      guard(patch('return a + 1;', 'return a < LIMIT ? a + 1 : a;') + '#define LIMIT 100\n'),
+    ).toBeUndefined();
+    const withLimit = `#define LIMIT 100\n${ORIGINAL}`;
+    expect(sourceGuards(withLimit, withLimit.replace('LIMIT 100', 'LIMIT 99'), withLimit)).toBeNull();
+  });
+
   it('rejects removed, changed or disabled assertions', () => {
     expect(guard(patch('    assert(a != 3);\n', ''))).toBe('assertions');
     expect(guard(patch('a != 3', 'a != 4'))).toBe('assertions');
@@ -227,6 +250,20 @@ describe('result guards', () => {
       ])?.message,
     ).toMatch(/\(it takes pointer parameters\)/);
     expect(obligationsGuard(before, after, [{ function: 'f', status: 'equivalent' }])).toBeNull();
+  });
+
+  it('rejects a patch whose behavior proof did not finish', () => {
+    const r = behaviorRejection([
+      { function: 'f', status: 'equivalent' },
+      { function: 'g', status: 'inconclusive', reason: 'the proof timed out' },
+    ]);
+    expect(r?.guard).toBe('behavior');
+    expect(r?.message).toMatch(
+      /^The proof that `g` behaves as before did not finish \(the proof timed out\)/,
+    );
+    expect(
+      behaviorRejection([{ function: 'h', status: 'skipped', reason: 'pointer parameters' }]),
+    ).toBeNull();
   });
 
   it('turns the first behavior difference into a rejection', () => {

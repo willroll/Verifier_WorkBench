@@ -43,15 +43,16 @@ const count = (items: string[]) => {
 };
 
 /**
- * Verifier-specific constructs, counted: intrinsics such as __CPROVER_assume
- * or __ESBMC_assume, compiler assumptions, pragmas that switch checks off, and
- * the names the behavior check reserves for itself (__vw_*).
+ * Verifier-specific or opaque constructs, counted: intrinsics such as
+ * __CPROVER_assume or __ESBMC_assume, compiler assumptions, pragmas that switch
+ * checks off (as directives or _Pragma), inline assembly the checker cannot
+ * see into, and the names the behavior check reserves for itself (__vw_*).
  */
 export function verifierConstructs(code: string): Map<string, number> {
   const text = blankCommentsAndStrings(code);
   const found = [
     ...text.matchAll(
-      /\b(__CPROVER_\w+|__ESBMC_\w+|__VERIFIER_\w+|__vw_\w+|__builtin_(?:assume|unreachable))\b/g,
+      /\b(__CPROVER_\w+|__ESBMC_\w+|__VERIFIER_\w+|__vw_\w+|__builtin_(?:assume|unreachable)|_Pragma|asm|__asm|__asm__)\b/g,
     ),
   ].map((m) => m[1]!);
   // Found in the blanked text (so commented-out pragmas do not count), quoted
@@ -104,6 +105,34 @@ const TERMINATING_CALLS =
 export function terminatingCalls(code: string): Map<string, number> {
   const text = blankCommentsAndStrings(code);
   return count([...text.matchAll(TERMINATING_CALLS)].map((m) => m[1]!));
+}
+
+// Keywords, and the builtins the behavior check's generated code relies on.
+// Redefining one with a macro is never part of a fix.
+export const RESERVED_WORDS = new Set([
+  ...'auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while'.split(
+    ' ',
+  ),
+  ...'_Alignas _Alignof _Atomic _Bool _Complex _Generic _Imaginary _Noreturn _Static_assert _Thread_local'.split(
+    ' ',
+  ),
+  ...'alignas alignof bool false true nullptr static_assert thread_local constexpr typeof typeof_unqual'.split(
+    ' ',
+  ),
+  ...'__typeof__ __typeof __attribute__ __attribute __extension__ __inline __inline__ __restrict __restrict__ __volatile__ __const asm __asm __asm__ _Pragma'.split(
+    ' ',
+  ),
+]);
+
+/** Identifiers the code uses (outside comments and strings). */
+export function identifiers(code: string): Set<string> {
+  return new Set(blankCommentsAndStrings(code).match(/\b[A-Za-z_]\w*\b/g) ?? []);
+}
+
+/** Names given to #define or #undef, counted. */
+export function macroDirectives(code: string): Map<string, number> {
+  const text = blankCommentsAndStrings(code);
+  return count([...text.matchAll(/^[ \t]*#[ \t]*(?:define|undef)[ \t]+([A-Za-z_]\w*)/gm)].map((m) => m[1]!));
 }
 
 /** Keys whose count in `after` is higher than in `before`. */

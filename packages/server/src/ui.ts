@@ -29,10 +29,24 @@ export const SHIM = `<script>
       if (r.ok) return r.data;
       return { available: true, status: 'error', error: (r.data && r.data.error) || ('HTTP ' + r.status) };
     },
+    // The prototype reads counts off every iteration and shows the last one's as
+    // the current state. Only the original and the accepted patch are code it
+    // shows, so other iterations carry their outcome as text instead of counts
+    // (a rejected patch's "0 refuted" must never read as "all proved").
     repair: async function (opts) {
       var r = await call('POST', '/api/repair', opts || {});
-      if (r.ok || (r.data && r.data.status)) return r.data;
-      throw new Error('repair failed: ' + r.status);
+      if (!(r.data && r.data.status)) throw new Error((r.data && r.data.error) || ('repair failed: ' + r.status));
+      var result = r.data;
+      (result.iterations || []).forEach(function (it) {
+        if (it.outcome === 'baseline' || it.outcome === 'accepted' || it.error) return;
+        var text = it.rejection ? 'rejected: ' + it.rejection.message
+          : it.outcome === 'improved' ? 'kept as a partial fix: ' + it.counts.refuted + ' refuted left'
+          : it.outcome === 'no-progress' ? 'no progress: ' + it.counts.refuted + ' still refuted'
+          : it.outcome;
+        it.error = text;
+        delete it.counts;
+      });
+      return result;
     },
     smtlib: async function (opts) {
       var res = await fetch('/api/smtlib', {

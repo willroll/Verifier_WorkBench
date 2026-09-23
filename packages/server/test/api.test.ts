@@ -131,14 +131,6 @@ describe('POST /api/smtlib', () => {
   });
 });
 
-describe('POST /api/repair', () => {
-  it('says the verified repair loop is not available yet', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/repair', payload: { code: arith } });
-    expect(res.statusCode).toBe(501);
-    expect(res.json()).toMatchObject({ status: 'error', iterations: [] });
-  });
-});
-
 describe('the old open LLM proxy', () => {
   it('is gone', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/complete', payload: { messages: [] } });

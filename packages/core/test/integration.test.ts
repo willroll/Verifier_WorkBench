@@ -3,9 +3,27 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Detector, LocalRunner, exportSmtlib, loadConfig, probe, verify } from '@verifier/core';
+import {
+  Detector,
+  LocalRunner,
+  checkEquivalence,
+  exportSmtlib,
+  loadConfig,
+  probe,
+  repair,
+  verify,
+} from '@verifier/core';
+import { ReplayRunner, StaticDetector, loadRecording } from '@verifier/core/testing';
 import type { EngineId, Finding, VerifyResult } from '@verifier/shared';
-import { sourcePath } from './scenarios';
+import {
+  EQ_CHECKS,
+  EQ_SCENARIOS,
+  REPAIR_SCENARIOS,
+  ScriptedProposer,
+  applyEdits,
+  recordingPath,
+  sourcePath,
+} from './scenarios';
 
 // Runs the real engines. Tools that are not installed are skipped, unless
 // VERIFIER_REQUIRE lists them (CI does), in which case their absence fails.
@@ -15,12 +33,17 @@ const detector = new Detector(config);
 const deps = { config, runner: new LocalRunner(config.concurrency), detector };
 const engines = await detector.get();
 const z3 = (await probe('z3', ['--version'])) !== null;
+// The behavior proof also needs CBMC's compiler and instrumenter.
+const gotoTools =
+  (await probe('goto-cc', ['--version'])) !== null &&
+  (await probe('goto-instrument', ['--version'])) !== null;
 
 const required = (process.env.VERIFIER_REQUIRE ?? '').split(',').filter(Boolean);
 const installed: Record<string, boolean> = {
   cbmc: engines.cbmc.available,
   esbmc: engines.esbmc.available,
   z3,
+  'goto-tools': gotoTools,
 };
 for (const s of engines.cbmc.solvers) installed[`cbmc:${s.id}`] = s.available;
 
@@ -104,3 +127,60 @@ for (const engine of ['cbmc', 'esbmc'] as EngineId[]) {
     });
   });
 }
+
+// The recorded scenarios the replay tests use must still describe what the
+// installed engines do; a new CBMC or ESBMC that changes a verdict fails here,
+// and `npm run record-fixtures` brings the recordings up to date.
+
+const replayDeps = (name: string) => {
+  const recording = loadRecording(recordingPath(name));
+  return {
+    config,
+    runner: new ReplayRunner(recording.runs),
+    detector: new StaticDetector(recording.engines),
+  };
+};
+
+describe.skipIf(!engines.cbmc.available || !gotoTools)('behavior proofs (real)', () => {
+  for (const s of EQ_SCENARIOS) {
+    it(`${s.name} matches its recording`, async () => {
+      const original = source(s.file);
+      const opts = {
+        original,
+        candidate: applyEdits(original, s.edits),
+        fileName: s.file,
+        checks: [...EQ_CHECKS],
+        unwind: config.defaultUnwind,
+        solver: s.solver,
+      };
+      const [live, recorded] = await Promise.all([
+        checkEquivalence(opts, deps),
+        checkEquivalence(opts, replayDeps(s.name)),
+      ]);
+      const verdict = (r: typeof live) => ({
+        rejection: r.rejection?.guard,
+        results: r.results.map((e) => [e.function, e.status]),
+      });
+      expect(verdict(live)).toEqual(verdict(recorded));
+    });
+  }
+});
+
+describe.skipIf(!engines.cbmc.available || !engines.esbmc.available || !gotoTools)('repairs (real)', () => {
+  for (const s of REPAIR_SCENARIOS.filter((x) => !x.recording)) {
+    it(`${s.name} matches its recording`, async () => {
+      const code = source(s.file);
+      const request = { ...s.request, code, fileName: s.file };
+      const repairConfig = loadConfig({ REPAIR_MAX_ITERS: '6' });
+      const run = (d: {
+        config: typeof config;
+        runner: LocalRunner | ReplayRunner;
+        detector: typeof detector | StaticDetector;
+      }) => repair(request, { ...d, config: repairConfig, proposer: new ScriptedProposer(code, s.answers) });
+      const [live, recorded] = await Promise.all([run(deps), run(replayDeps(s.name))]);
+      const outcomes = (r: typeof live) => r.iterations.map((i) => i.rejection?.guard ?? i.outcome);
+      expect(outcomes(live)).toEqual(outcomes(recorded));
+      expect(live.status).toBe(recorded.status);
+    });
+  }
+});

@@ -25,13 +25,21 @@ then the UI rebuild at design fidelity, then hosting hardening and product expan
 |---|---|
 | 0 Foundation | **Done.** npm-workspaces TypeScript monorepo, ESLint, Prettier, Vitest, GitHub Actions (check, real engines, Docker smoke test). |
 | 1 Truthful verification | **Done.** V1–V4 and V6–V8 are fixed and pinned by tests. The solver choice and SMT-LIB export are real (D3). The prototype UI runs against the new server. |
-| 2 Ungameable repair | **Next.** `/api/repair` returns 501 until then; `hosted-example/` keeps the old loop for reference. |
-| 3–5 | Not started. |
+| 2 Ungameable repair | **Done.** V5, V6 and V11 are fixed and pinned by replayed and live tests. `/api/repair` (plus an SSE variant) runs a guarded loop whose accepted patches are re-verified and proved behavior-preserving. `GET /api/providers` lists Claude, ChatGPT, Gemini and self-hosted. |
+| 3 UI rebuild | **Next.** |
+| 4–5 | Not started. |
 
 Two things from the Phase 1 build changed the design:
 
 - **Every function gets its own run**, even one with no obligations of its own. A `memcpy` overflow lives in library code, and ESBMC generates its pointer checks only during symbolic execution, so skipping "obligation-free" functions missed both.
 - **Pointer-argument findings carry a `note`.** The per-function harness passes arbitrary pointers, so `int deref(const int *p) { return *p; }` is refuted with `p = NULL`. That is true, but it may be a caller precondition rather than a bug.
+
+The Phase 2 build changed the plan in these ways:
+
+- **Behavior preservation is proved, not tested.** Instead of running both versions under UBSan on sample inputs, CBMC compiles the original and the candidate side by side and proves, for each changed function and everything that calls one, that it returns the same value and leaves the same globals on *every* input where the original has no undefined behavior and passes its assertions. That covers all inputs rather than samples, never executes submitted code on the server, and reuses the toolchain already in the image. A difference comes back as concrete inputs, which the model gets as feedback (`store(idx = 13, v = 128)` leaves `buf[13]` different).
+- **More guards than planned.** Each closes a way to reach "proved" without fixing the code, found while building the loop: calls that end the program (CBMC treats `abort()`/`exit()` as a path that stops), `#define NDEBUG` or a redefined `assert`, macros that redefine existing names or keywords (the proof is compiled after the patch), `_Pragma` and inline assembly, a candidate that turns decided obligations into inconclusive ones (an added loop past the bound), and a behavior proof that does not finish or cannot be built.
+- **Baseline rule: strictly fewer.** A candidate replaces the current best only with strictly fewer refuted obligations, and only after passing every guard including the behavior proof; the result is `repaired` only when nothing is refuted and nothing new is inconclusive.
+- **Known limits of the behavior proof.** Functions with pointer or aggregate parameters or results, variadic functions and functions that reach a body-less function are listed as `skipped`; for them, a function whose checks all vanished is still rejected. Function-local `static` state is not compared, and each call starts from the globals' initial values.
 
 ## 1. What's in the repo
 
@@ -152,30 +160,16 @@ every phase has a working end-to-end demo.
   - The V3 and V4 cases produce no false "proved".
   - The fixture tests and the CBMC integration tests pass in CI.
 
-### Phase 2: Ungameable repair loop
-- **Guards enforced in code.** A candidate that breaks any of these is rejected, and the reason is fed back to the model:
-  - Every original function is still defined, with an identical signature.
-  - No new `__CPROVER_assume`, `__ESBMC_assume`, or `assume`.
-  - No `assert` removed or weakened.
-  - No function's set of obligations shrinks.
-  - The harness is untouched.
-
-  Parse the source with tree-sitter-c or read the checker's symbol table.
-- **Behavior preservation.** Compile the original and the candidate with clang + UBSan. Run both on boundary and random inputs for which the original has no undefined behavior, and compare outputs. A divergence rejects the candidate, which would have caught V6.
-- **Claude plumbing (Anthropic adapter).**
-  - Move to `@anthropic-ai/sdk`.
-  - Default to `claude-opus-5`, overridable by environment variable.
-  - Ask for structured output `{code, rationale}` through `output_config.format` instead of regex-parsing fences.
-  - Stream the response (`finalMessage()`) with `max_tokens` sized for whole files.
-  - Treat `stop_reason` `max_tokens` and `refusal` as explicit iteration errors.
-- **Other providers.** Keep the Gemini, OpenAI, and self-hosted adapters, and move the Gemini key into a header.
-- **Semantics.**
-  - A misconfigured provider returns `error`.
-  - Add `GET /api/providers` so the UI can disable unconfigured providers.
-  - Choose between the strictly-fewer and no-more baseline rules, and make the code and docs agree.
-  - Give multi-turn feedback that includes the rejected candidate and why it was rejected.
-- **Progress.** Stream iterations over SSE so the Agent card fills in as the loop runs, instead of a long blank wait.
-- **Exit:** The V5 cheating patches and the V6 fix are rejected with clear reasons, and the honest fix is accepted as `repaired`.
+### Phase 2: Ungameable repair loop *(done)*
+- **Guards enforced in code** (`packages/core/src/repair/guards.ts`). A rejected candidate's reason goes back to the model:
+  - Source: no new verifier intrinsics, assumptions, checker pragmas (directive or `_Pragma`), inline assembly or `__vw_` names; no removed, changed or disabled assertions; no new calls that end the program; no macros redefining existing names or keywords; no includes outside the source.
+  - Result: the same engine settings re-verify it; every original function keeps its exact type (CBMC's type with names stripped); no function gets more inconclusive obligations than the original had; a function whose obligations all vanished must be proved equivalent.
+- **Behavior preservation, proved** (`equivalence.ts`). See *Progress* above; every global of the original must survive with its type.
+- **Claude plumbing** (`packages/llm/src/anthropic.ts`). `@anthropic-ai/sdk`, `claude-opus-5` by default (`CLAUDE_MODEL`), one streamed request per attempt with `max_tokens` 64000, adaptive thinking at effort `high`, structured output `{rationale, code}` through `output_config.format`, the original source as a cacheable block, and server-side refusal fallbacks (`fallbacks: "default"`) on by default. `stop_reason` `refusal` and `max_tokens` become explicit iteration errors; SDK errors map to typed outcomes (auth and configuration stop the loop).
+- **Other providers.** OpenAI (schema enforced), any OpenAI-compatible self-hosted server (format given as an instruction) and Gemini (schema enforced, key in a header).
+- **Semantics.** A misconfigured provider returns `error` after the original is verified, so code that is already proved needs no key. `GET /api/providers` lists providers and what each still needs. The prompt's stable part (source and counterexamples) is identical across attempts; each attempt adds the current best version and why the last candidate failed.
+- **Progress.** `POST /api/repair/stream` sends `checking`, `proposing`, `iteration` and `result` events; a client that disconnects cancels the repair and its model request. `REPAIR_CONCURRENCY` bounds concurrent repairs (429 beyond it).
+- **Exit (met):** in `packages/core/test/repair.test.ts`, the design prototype's fix makes no progress, its overflow-free variant and a gutted `store` are rejected by the behavior proof with counterexamples, `__CPROVER_assume` and a widened signature are rejected, and the honest fix is accepted as `repaired` with both functions proved equivalent. CI repeats this inside the Docker image with a scripted model.
 
 ### Phase 3: UI rebuild at design fidelity
 - Implement the tokens as CSS custom properties exactly per the `docs/design-handoff.md` spec, in light and dark. Use IBM Plex Sans and Mono, with no shadows or gradients.
@@ -248,6 +242,13 @@ every phase has a working end-to-end demo.
 
 - **ESBMC reporting quirks.** ESBMC writes its report to **stderr** and needs `main` or `--function`. For `--function` runs it never prints parameter values. A generated wrapper that makes the parameters locals, set from body-less functions, makes the values appear (`a = -1`, `b = -2147483648`; `idx = 16`).
 - **Checkable exports.** Per-obligation SMT-LIB exports from both engines are accepted by z3, which answers `sat` for refuted obligations, so anyone can re-check an export.
+
+Facts the Phase 2 behavior proof depends on (CBMC 5.95.1):
+
+- `goto-instrument <check flags> --assert-to-assume` turns the checks it adds into assumptions only in that same pass, and never the program's own `assert()` calls; the original is therefore compiled against an `assert.h` that assumes.
+- `__CPROVER_array_equal` gives false differences under the SMT back ends (z3, cvc5) but not MiniSAT; arrays are compared at a symbolic index instead, which every back end decides.
+- CBMC leaves unused file-local globals out of the symbol table, so the candidate is read together with a generated function that uses every global of the original.
+- `abort()` and `exit()` are modeled as a path that stops (an assumption of false), which would make "abort on hard inputs" look equivalent; the proof supplies its own definitions that flag it.
 
 ## Appendix: reproducing the findings
 

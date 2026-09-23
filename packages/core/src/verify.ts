@@ -94,6 +94,11 @@ async function resolve(req: Options, deps: VerifierDeps): Promise<Resolved> {
   return { engine, info, solver, unwind, checks: [...new Set(checks)], fileName: safeFileName(req.fileName) };
 }
 
+/** Throws RequestError for a request verify() would reject, without running anything. */
+export async function validateRequest(req: Options, deps: VerifierDeps): Promise<void> {
+  await resolve(req, deps);
+}
+
 const zero = (): Counts => ({ proved: 0, refuted: 0, inconclusive: 0 });
 
 function countOf(findings: Finding[]): Counts {

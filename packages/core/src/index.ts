@@ -7,6 +7,7 @@ export {
   ADAPTERS,
   RequestError,
   exportSmtlib,
+  validateRequest,
   verify,
   verifyDetailed,
   type DetailedVerification,

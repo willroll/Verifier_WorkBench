@@ -54,7 +54,7 @@ jobs:
       - name: Integration tests (missing tools fail instead of skipping)
         run: npx vitest run packages/core/test/integration.test.ts
         env:
-          VERIFIER_REQUIRE: cbmc,esbmc,z3,cbmc:z3,cbmc:cvc5
+          VERIFIER_REQUIRE: cbmc,esbmc,z3,cbmc:z3,cbmc:cvc5,goto-tools
 
   docker:
     name: Docker image verifies the sample end to end
@@ -62,9 +62,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - run: docker build -t verifier-workbench .
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
       - name: Smoke test
         run: |
-          docker run -d --name vw -p 3000:3000 verifier-workbench
+          # A scripted stand-in for a self-hosted model, so the repair loop runs without an API key.
+          node packages/server/test/fake-model.mjs packages/core/test/fixtures/c/arith.c 4011 &
+          # Host networking reaches the fake model; the hardening flags are the ones the Dockerfile recommends.
+          docker run -d --name vw --network host --read-only --tmpfs /tmp --cap-drop ALL --pids-limit 512 \
+            -e LLM_PROVIDER=custom -e LLM_BASE_URL=http://127.0.0.1:4011/v1 verifier-workbench
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/api/health && break; sleep 1; done
           curl -fsS http://127.0.0.1:3000/api/engines | jq -e '.engines.cbmc.available and .engines.esbmc.available'
           code=$(jq -Rs . < packages/core/test/fixtures/c/arith.c)
@@ -79,6 +86,16 @@ jobs:
             jq -c '{engine, status, counts, solver: .solver.label}' "verify-$engine.json"
           done
           curl -fsS http://127.0.0.1:3000/ | grep -q 'window.verifier = {'
+          curl -fsS -X POST http://127.0.0.1:3000/api/repair -H 'content-type: application/json' \
+            -d "{\"code\": $code, \"fileName\": \"arith.c\"}" -o repair.json
+          if ! jq -e '.status == "repaired"
+              and ([.iterations[] | (.rejection.guard // .outcome)] == ["baseline", "behavior", "accepted"])
+              and ([.equivalence[].status] | all(. == "equivalent"))' repair.json > /dev/null; then
+            echo "::error::the repair loop did not reject the gutted patch and accept the honest fix"
+            jq '{status, error, iterations: [.iterations[] | {iter, outcome, rejection, error}], equivalence}' repair.json
+            exit 1
+          fi
+          jq -c '{status, outcomes: [.iterations[] | (.rejection.guard // .outcome)], equivalence: [.equivalence[] | [.function, .status]]}' repair.json
       - name: Container logs
         if: always()
         run: docker logs vw || true

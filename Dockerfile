@@ -17,6 +17,7 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/core/package.json packages/core/
+COPY packages/llm/package.json packages/llm/
 COPY packages/server/package.json packages/server/
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
@@ -46,7 +47,9 @@ RUN apt-get update \
  && printf '#include <stdint.h>\n#include <string.h>\nint32_t f(int32_t a) { return a; }\n' > /tmp/selftest.c \
  && cbmc /tmp/selftest.c --function f > /dev/null \
  && esbmc /tmp/selftest.c --function f > /dev/null \
- && rm /tmp/selftest.c
+ && goto-cc /tmp/selftest.c -o /tmp/selftest.gb \
+ && goto-instrument /tmp/selftest.gb /tmp/selftest-checked.gb --signed-overflow-check --assert-to-assume > /dev/null \
+ && rm /tmp/selftest.c /tmp/selftest.gb /tmp/selftest-checked.gb
 
 COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 

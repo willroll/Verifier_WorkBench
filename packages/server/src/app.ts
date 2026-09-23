@@ -6,17 +6,24 @@ import {
   RequestError,
   exportSmtlib,
   loadConfig,
+  repair,
   verify,
   type CoreConfig,
   type EngineDetector,
   type Runner,
   type VerifierDeps,
 } from '@verifier/core';
+import { createProposer, describeProviders, loadLlmConfig, type LlmConfig } from '@verifier/llm';
 import {
   CHECK_IDS,
   ENGINE_IDS,
+  PROVIDER_IDS,
   SOLVER_IDS,
   type EnginesResponse,
+  type Proposer,
+  type ProviderId,
+  type RepairEvent,
+  type RepairRequest,
   type RepairResult,
   type SmtlibRequest,
   type VerifyRequest,
@@ -28,8 +35,11 @@ import { loadUi } from './ui';
 export interface AppOptions {
   server: ServerConfig;
   core?: CoreConfig;
+  llm?: LlmConfig;
   runner?: Runner;
   detector?: EngineDetector;
+  /** The model a repair uses (tests pass a scripted one). */
+  proposer?: (provider: ProviderId) => Proposer;
   logger?: boolean;
 }
 
@@ -58,6 +68,17 @@ const verifySchema = {
   },
 } as const;
 
+const repairSchema = {
+  type: 'object',
+  required: ['code'],
+  additionalProperties: false,
+  properties: {
+    ...sourceFields,
+    provider: { type: 'string', enum: [...PROVIDER_IDS] },
+    maxIters: { type: 'integer', minimum: 1 },
+  },
+} as const;
+
 const smtlibSchema = {
   type: 'object',
   required: ['code', 'function', 'ref'],
@@ -76,6 +97,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     runner: opts.runner ?? new LocalRunner(core.concurrency),
     detector: opts.detector ?? new Detector(core),
   };
+  const llm = opts.llm ?? loadLlmConfig();
+  const proposerFor = opts.proposer ?? ((id: ProviderId) => createProposer(id, llm));
   const ui = opts.server.uiHtml ? await loadUi(opts.server.uiHtml) : null;
 
   const app = Fastify({
@@ -130,17 +153,83 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       .send(out.text);
   });
 
-  // The verified repair loop is being rebuilt with enforced guards (docs/PLAN.md, Phase 2).
-  app.post('/api/repair', async (_req, reply) => {
-    const body: RepairResult = {
-      status: 'error',
-      iterations: [],
-      error:
-        'Verified repair is being rebuilt with enforced anti-cheat guards (Phase 2). ' +
-        'Verification, counterexamples and SMT-LIB export work now.',
-    };
-    return reply.code(501).send(body);
+  app.get('/api/providers', (_req, reply) => reply.send(describeProviders(llm)));
+
+  // Each repair spends model tokens, so only a few run at once; the rest are
+  // turned away rather than queued behind minutes of work. A repair stops
+  // (and its model request is cancelled) when the client goes away.
+  let activeRepairs = 0;
+  const busy = (): RepairResult => ({
+    status: 'error',
+    iterations: [],
+    error: `The server is already running ${opts.server.repairConcurrency} repair(s); try again shortly.`,
   });
+  const runRepair = async (body: RepairRequest, reply: FastifyReply, onEvent?: (e: RepairEvent) => void) => {
+    const controller = new AbortController();
+    const cancel = () => {
+      if (!reply.raw.writableFinished) controller.abort();
+    };
+    reply.raw.on('close', cancel);
+    activeRepairs++;
+    try {
+      const proposer = proposerFor(body.provider ?? llm.defaultProvider);
+      return await repair(
+        body,
+        { ...deps, proposer },
+        { signal: controller.signal, ...(onEvent ? { onEvent } : {}) },
+      );
+    } finally {
+      activeRepairs--;
+      reply.raw.off('close', cancel);
+    }
+  };
+
+  app.post<{ Body: RepairRequest }>('/api/repair', { schema: { body: repairSchema } }, async (req, reply) => {
+    if (activeRepairs >= opts.server.repairConcurrency) return reply.code(429).send(busy());
+    return runRepair(req.body, reply);
+  });
+
+  // The same repair as server-sent events: checking, proposing and iteration
+  // events as it goes, then the result. A request the loop rejects before its
+  // first event gets an ordinary 400.
+  app.post<{ Body: RepairRequest }>(
+    '/api/repair/stream',
+    { schema: { body: repairSchema } },
+    async (req, reply) => {
+      if (activeRepairs >= opts.server.repairConcurrency) return reply.code(429).send(busy());
+      const res = reply.raw;
+      let open = false;
+      const send = (event: string, data: unknown) => {
+        if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+      const heartbeat = setInterval(() => {
+        if (open && !res.writableEnded) res.write(': keepalive\n\n');
+      }, 15_000);
+      try {
+        await runRepair(req.body, reply, (e) => {
+          if (!open) {
+            open = true;
+            reply.hijack();
+            res.writeHead(200, {
+              'content-type': 'text/event-stream; charset=utf-8',
+              'cache-control': 'no-store',
+              'x-content-type-options': 'nosniff',
+              'referrer-policy': 'no-referrer',
+              'x-accel-buffering': 'no',
+            });
+          }
+          send(e.type, e);
+        });
+      } catch (e) {
+        if (!open) throw e;
+        if (!(e instanceof RequestError)) req.log.error(e);
+        send('error', { error: e instanceof RequestError ? e.message : 'internal error' });
+      } finally {
+        clearInterval(heartbeat);
+        if (open) res.end();
+      }
+    },
+  );
 
   if (ui) {
     const sendUi = async (_req: unknown, reply: FastifyReply) =>
