@@ -1,0 +1,14 @@
+{
+  "name": "@verifier/core",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Verification core: runs CBMC or ESBMC per function and normalizes their results. No HTTP or storage dependencies.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "dependencies": {
+    "@verifier/shared": "*"
+  }
+}

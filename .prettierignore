@@ -1,0 +1,10 @@
+# Claude Design handoff, kept verbatim as reference
+design/
+hosted-example/
+
+# Prose and generated files
+*.md
+package-lock.json
+packages/*/test/fixtures/
+dist/
+coverage/

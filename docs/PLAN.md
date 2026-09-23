@@ -6,7 +6,7 @@ from Ubuntu 24.04. Commands to reproduce each finding are in the appendix.
 
 ## TL;DR
 
-The design is strong. The handoff spec (`README.md`) covers tokens, layouts, the API
+The design is strong. The handoff spec (`docs/design-handoff.md`, originally the root `README.md`) covers tokens, layouts, the API
 contract, and the repair-loop invariants. The backend is a good sketch, but its central
 claims do not hold yet when it runs against a real checker:
 
@@ -19,11 +19,25 @@ claims do not hold yet when it runs against a real checker:
 The plan therefore puts **truthful verification first**, then enforced repair guards,
 then the UI rebuild at design fidelity, then hosting hardening and product expansion.
 
+## Progress
+
+| Phase | Status |
+|---|---|
+| 0 Foundation | **Done.** npm-workspaces TypeScript monorepo, ESLint, Prettier, Vitest, GitHub Actions (check, real engines, Docker smoke test). |
+| 1 Truthful verification | **Done.** V1–V4 and V6–V8 are fixed and pinned by tests. The solver choice and SMT-LIB export are real (D3). The prototype UI runs against the new server. |
+| 2 Ungameable repair | **Next.** `/api/repair` returns 501 until then; `hosted-example/` keeps the old loop for reference. |
+| 3–5 | Not started. |
+
+Two things from the Phase 1 build changed the design:
+
+- **Every function gets its own run**, even one with no obligations of its own. A `memcpy` overflow lives in library code, and ESBMC generates its pointer checks only during symbolic execution, so skipping "obligation-free" functions missed both.
+- **Pointer-argument findings carry a `note`.** The per-function harness passes arbitrary pointers, so `int deref(const int *p) { return *p; }` is refuted with `p = NULL`. That is true, but it may be a caller precondition rather than a bug.
+
 ## 1. What's in the repo
 
 | Path | What it is | Disposition |
 |---|---|---|
-| `README.md` | Handoff spec: 5 screens, design tokens, API, state model, roadmap | Keep as the design spec |
+| `README.md` (now `docs/design-handoff.md`) | Handoff spec: 5 screens, design tokens, API, state model, roadmap | Keep as the design spec |
 | `hosted-example/server.js` | Zero-dependency Node HTTP server, 4 LLM provider adapters, page shim, 4 endpoints | Reference; replace |
 | `hosted-example/engines.js` | CBMC (JSON) and ESBMC (text) adapters → normalized `Finding` | Port, with the fixes below |
 | `hosted-example/repair.js` | Bounded verify → patch → re-verify loop, LCS line diff | Port, with the fixes below |
@@ -100,7 +114,7 @@ every phase has a working end-to-end demo.
 - npm-workspaces monorepo:
   - `packages/shared`: the contract types `VerifyResult`, `Finding`, and `RepairResult`.
   - `packages/server`: Node 22 + TypeScript, with a small framework (e.g. Fastify) for body limits, schema validation, and SSE.
-  - `packages/web`: React + Vite + TypeScript.
+  - `packages/web`: React + Vite + TypeScript, created at the start of Phase 3 when the UI rebuild begins.
   - `design/` stays as a read-only reference, and `hosted-example/` stays runnable until the new server reaches parity.
 - Strict TypeScript, ESLint and Prettier, Vitest, and a `.gitignore`.
 - A GitHub Actions workflow that runs lint, typecheck, and unit tests, plus an integration job that runs `apt-get install cbmc`.
@@ -124,13 +138,15 @@ every phase has a working end-to-end demo.
   - Keep the per-finding trace steps for a trace viewer.
 - **Arbitrary-input caveat.** A per-function harness gives every input an arbitrary value, so a pointer or size-parameter finding may really be a caller precondition. v1 labels such findings. Later, add `__CPROVER_requires` contracts and `goto-harness`, which ships in the cbmc package, for pointer-shaped inputs.
 - **ESBMC.**
-  - Fix the install (correct release asset, pinned version).
-  - Use a per-function entry point.
-  - Parse a model per violation; today every finding gets the whole output's model.
+  - Fix the install: v8.5, `esbmc-linux.zip`.
+  - Read the report from stderr.
+  - For each function, run a generated wrapper so the witness values appear.
+  - Parse the multi-property `** Results:` block (PASSED, FAILED, NOT CHECKED) per violation; today every finding gets the whole output's model.
   - Report real proved counts; today the count is always 0.
-- **Solver and SMT-LIB (decision D3).**
-  - Either make the solver real (`--z3` / `--cvc5`, detected by `/api/engines`) and export SMT-LIB per property (`--property p --smt2 --outfile`, as `QF_AUFBV`),
-  - or relabel the solver as "SAT (MiniSAT)" and rename the tab "Checker output".
+- **Solver and SMT-LIB (decision D3: make them real).**
+  - `solver` is a real verify option. `/api/engines` reports, per engine, which solvers are usable on this host, with their versions.
+  - The result records the solver and the encoding the checker actually used (e.g. SAT/MiniSAT, SMT-LIB `QF_AUFBV` via Z3).
+  - Export SMT-LIB per obligation: `--property p --smt2 --outfile` for CBMC; `--claim n --smt-formula-only --output` for ESBMC.
 - **Exit:**
   - The sample `arith.c` gives 2 refuted obligations, with witnesses `a, b` and `idx=16`.
   - The V3 and V4 cases produce no false "proved".
@@ -162,7 +178,7 @@ every phase has a working end-to-end demo.
 - **Exit:** The V5 cheating patches and the V6 fix are rejected with clear reasons, and the honest fix is accepted as `repaired`.
 
 ### Phase 3: UI rebuild at design fidelity
-- Implement the tokens as CSS custom properties exactly per the `README.md` spec, in light and dark. Use IBM Plex Sans and Mono, with no shadows or gradients.
+- Implement the tokens as CSS custom properties exactly per the `docs/design-handoff.md` spec, in light and dark. Use IBM Plex Sans and Mono, with no shadows or gradients.
 - Routes: `/new`, `/runs/:id` (Workbench), `/runs/:id/report`, `/misra`, `/batch`.
 - Components:
 
@@ -205,15 +221,33 @@ every phase has a working end-to-end demo.
 - **Problem Sets.** Batch upload, a queue, and rubric scoring.
 - **Scale.** Multi-file projects via `compile_commands.json`, and function contracts for the functional properties the design implies (e.g. `clamp#post`).
 
-## 5. Decisions needed
+## 5. Decisions (2026-09-23)
 
-| # | Decision | Recommendation |
+| # | Decision | Outcome |
 |---|---|---|
-| D1 | Stack | TypeScript monorepo: React + Vite + TS for the web app and Node 22 + TS for the server. This matches the handoff's suggestion, and the finding and repair contract is shared. |
-| D2 | Order | Backend truthfulness (Phases 1–2) before the full UI rebuild. The existing prototype UI keeps working against the new server in the meantime. |
-| D3 | SMT-LIB identity | Make it real: the `--z3` / `--cvc5` back ends plus per-property SMT-LIB export, since the product name promises SMT-LIB. The alternative is to relabel it honestly. |
+| D1 | Stack | TypeScript monorepo (npm workspaces): Node 22 + TS for the server, React + Vite + TS for the web app. TypeScript is pinned to 6.0.x, because typescript-eslint does not support TypeScript 7 yet. |
+| D2 | Order | Backend truthfulness (Phases 1–2) comes before the full UI rebuild. Meanwhile, the new server serves the existing prototype UI. |
+| D3 | SMT-LIB identity | **Make it real.** The solver picker maps to real solver back ends, and each obligation can be exported as SMT-LIB that any solver can re-check. |
 | D4 | LLM providers | Keep all four (Claude, Gemini, ChatGPT, self-hosted), with Claude as the default. |
-| D5 | Deployment target | Local tool, internal hosted, or public? The answer sets how deep Phase 4 goes. |
+| D5 | Deployment | **SaaS on a server is the target; a local install may also be offered.** The details are still open, so the design keeps both options (see below). |
+
+### Deployment model (SaaS first, local possible)
+
+- **Core as a library.** The verification core (`@verifier/core`) has no HTTP or storage dependencies. The same code can run in the SaaS API, a local server, a CLI, or a CI action.
+- **Pluggable runner.** Checker processes run through a `Runner` interface. Phase 1 ships a local runner with timeouts, output caps, a `prlimit` memory cap, and a concurrency cap. For SaaS, Phase 4 adds an isolated runner behind the same interface: a per-job container or sandbox with no network.
+- **Stateless server.** The server is configured by environment variables, and one Docker image serves both modes.
+- **Pluggable services.** Auth, persistence, and quotas are swappable: none and SQLite for local; a token or OIDC, plus Postgres, for SaaS (Phase 4).
+- **Auditable results.** Every result records the engine, solver, versions, and exact flags, so any run can be reproduced.
+
+### Toolchain facts established during Phase 0–1 setup
+
+| Engine | Solvers | Notes |
+|---|---|---|
+| CBMC 5.95.1 | MiniSAT (built in); z3 and cvc5 (apt) | z3 and cvc5 run as external binaries. Bitwuzla isn't packaged, and `cbmc --bitwuzla` without the binary ends in `ERROR`, so detection offers a solver only when its binary is present. |
+| ESBMC 8.5.0 | Bitwuzla (default), z3, cvc5, Boolector — all built in | Current release, shipped as `esbmc-linux.zip` (a 641 MB static binary; the Dockerfile's v7.6.1 `.tar.xz` URL is stale). |
+
+- **ESBMC reporting quirks.** ESBMC writes its report to **stderr** and needs `main` or `--function`. For `--function` runs it never prints parameter values. A generated wrapper that makes the parameters locals, set from body-less functions, makes the values appear (`a = -1`, `b = -2147483648`; `idx = 16`).
+- **Checkable exports.** Per-obligation SMT-LIB exports from both engines are accepted by z3, which answers `sat` for refuted obligations, so anyone can re-check an export.
 
 ## Appendix: reproducing the findings
 

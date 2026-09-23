@@ -1,0 +1,17 @@
+{
+  "name": "@verifier/server",
+  "version": "0.4.0",
+  "private": true,
+  "description": "HTTP API for the Verifier Workbench; also serves the prototype UI until the React rebuild lands.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "node build.js",
+    "start": "node dist/server.mjs"
+  },
+  "dependencies": {
+    "@verifier/core": "*",
+    "@verifier/shared": "*",
+    "fastify": "^5.12.5"
+  }
+}
