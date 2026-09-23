@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
 import {
   Detector,
@@ -42,6 +45,20 @@ export interface AppOptions {
   proposer?: (provider: ProviderId) => Proposer;
   logger?: boolean;
 }
+
+// The web app loads only its own scripts, styles and fonts, and talks only to this API.
+const WEB_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "font-src 'self'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
 
 const identifier = { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_]*$', maxLength: 256 } as const;
 const sourceFields = {
@@ -100,6 +117,9 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const llm = opts.llm ?? loadLlmConfig();
   const proposerFor = opts.proposer ?? ((id: ProviderId) => createProposer(id, llm));
   const ui = opts.server.uiHtml ? await loadUi(opts.server.uiHtml) : null;
+  const webIndex = opts.server.webDist
+    ? await fs.readFile(path.join(opts.server.webDist, 'index.html'), 'utf8')
+    : null;
 
   const app = Fastify({
     logger: opts.logger === false ? false : { level: opts.server.logLevel },
@@ -232,11 +252,51 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     },
   );
 
+  // The design prototype stays reachable for side-by-side comparison.
   if (ui) {
     const sendUi = async (_req: unknown, reply: FastifyReply) =>
       reply.type('text/html; charset=utf-8').send(ui);
-    app.get('/', sendUi);
-    app.get('/index.html', sendUi);
+    app.get('/prototype', sendUi);
+    if (!webIndex) {
+      app.get('/', sendUi);
+      app.get('/index.html', sendUi);
+    }
+  }
+
+  // The web app: hashed assets cached for good, and every other page path
+  // answered with index.html so the client-side routes (/runs/7) load.
+  if (webIndex && opts.server.webDist) {
+    await app.register(fastifyStatic, {
+      root: opts.server.webDist,
+      index: false,
+      wildcard: true,
+      setHeaders: (reply, file) => {
+        const immutable = file.includes(`${path.sep}assets${path.sep}`);
+        void reply.header('cache-control', immutable ? 'public, max-age=31536000, immutable' : 'no-cache');
+        if (file.endsWith('.html')) {
+          void reply.header('content-security-policy', WEB_CSP).header('x-frame-options', 'DENY');
+        }
+      },
+    });
+    const sendIndex = async (_req: unknown, reply: FastifyReply) =>
+      reply
+        .type('text/html; charset=utf-8')
+        .header('cache-control', 'no-cache')
+        .header('content-security-policy', WEB_CSP)
+        .header('x-frame-options', 'DENY')
+        .send(webIndex);
+    app.get('/', sendIndex);
+    app.setNotFoundHandler((req, reply) => {
+      // Only page paths get the app: a missing file (an old asset hash after a
+      // deploy, /favicon.ico) is a 404, not HTML under a script's name.
+      const pathname = req.url.split('?')[0]!;
+      const page =
+        (req.method === 'GET' || req.method === 'HEAD') &&
+        !/^\/(api|assets)(\/|$)/.test(pathname) &&
+        !/\.[a-z0-9]+$/i.test(pathname);
+      if (page) return sendIndex(req, reply);
+      return reply.code(404).send({ error: `no route for ${req.method} ${pathname}` });
+    });
   }
 
   return app;

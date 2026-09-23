@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# Verifier Workbench: API server + prototype UI, with CBMC, ESBMC, Z3 and cvc5.
+# Verifier Workbench: API server and web app (the design prototype stays at
+# /prototype), with CBMC, ESBMC, Z3 and cvc5.
 #
 #   docker build -t verifier-workbench .
 #   docker run --rm -p 3000:3000 verifier-workbench
@@ -11,7 +12,7 @@
 #   --read-only --tmpfs /tmp --memory 4g --pids-limit 512 --cap-drop ALL
 # and put auth in front before exposing it (docs/PLAN.md, Phase 4).
 
-# ---- build: bundle the server and the workspace packages it imports --------
+# ---- build: the web app, and the server bundled with the packages it imports
 FROM node:22-bookworm-slim AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
@@ -19,6 +20,7 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/core/package.json packages/core/
 COPY packages/llm/package.json packages/llm/
 COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY packages ./packages
@@ -55,6 +57,7 @@ COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 
 WORKDIR /app
 COPY --from=build /src/packages/server/dist ./dist
+COPY --from=build /src/packages/web/dist ./web
 COPY ["design/Verifier Workbench (standalone).html", "./ui/index.html"]
 
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin verifier
@@ -63,6 +66,7 @@ USER verifier
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
+    WEB_DIST=/app/web \
     UI_HTML=/app/ui/index.html
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \

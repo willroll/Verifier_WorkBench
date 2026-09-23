@@ -22,7 +22,7 @@ let app: FastifyInstance;
 let apiOnly: FastifyInstance;
 
 beforeAll(async () => {
-  const server = { ...loadServerConfig({}), uiHtml: uiFile, bodyLimit: 64 * 1024 };
+  const server = { ...loadServerConfig({}), uiHtml: uiFile, webDist: null, bodyLimit: 64 * 1024 };
   const deps = {
     core: loadConfig({}),
     runner: new ReplayRunner(recording.runs),
@@ -141,6 +141,7 @@ describe('the old open LLM proxy', () => {
 describe('prototype UI', () => {
   it('is served with the API shim injected into <head>', async () => {
     const res = await app.inject({ method: 'GET', url: '/' });
+    expect((await app.inject({ method: 'GET', url: '/prototype' })).body).toBe(res.body);
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/html/);
     expect(res.body).toMatch(/<head>\s*<script>[\s\S]*window\.verifier = \{/);

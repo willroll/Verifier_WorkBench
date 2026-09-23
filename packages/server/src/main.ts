@@ -18,7 +18,9 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 await app.listen({ port: server.port, host: server.host });
 app.log.info(
-  server.uiHtml
-    ? `prototype UI: ${server.uiHtml}`
-    : 'no prototype UI found (set UI_HTML); serving the API only',
+  server.webDist
+    ? `web app: ${server.webDist}`
+    : 'web app not built (npm run build, or set WEB_DIST)' +
+        (server.uiHtml ? '; serving the prototype at /' : ''),
 );
+if (server.uiHtml) app.log.info(`prototype UI at /prototype: ${server.uiHtml}`);

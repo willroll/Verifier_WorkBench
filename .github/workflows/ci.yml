@@ -65,6 +65,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
       - name: Smoke test
         run: |
           # A scripted stand-in for a self-hosted model, so the repair loop runs without an API key.
@@ -85,7 +86,10 @@ jobs:
             fi
             jq -c '{engine, status, counts, solver: .solver.label}' "verify-$engine.json"
           done
-          curl -fsS http://127.0.0.1:3000/ | grep -q 'window.verifier = {'
+          # The web app at /, under its CSP; the design prototype stays reachable.
+          curl -fsS -D headers.txt http://127.0.0.1:3000/runs/1 | grep -q '<div id="root"></div>'
+          grep -qi "^content-security-policy: default-src 'self'" headers.txt
+          curl -fsS http://127.0.0.1:3000/prototype | grep -q 'window.verifier = {'
           curl -fsS -X POST http://127.0.0.1:3000/api/repair -H 'content-type: application/json' \
             -d "{\"code\": $code, \"fileName\": \"arith.c\"}" -o repair.json
           if ! jq -e '.status == "repaired"
@@ -96,6 +100,15 @@ jobs:
             exit 1
           fi
           jq -c '{status, outcomes: [.iterations[] | (.rejection.guard // .outcome)], equivalence: [.equivalence[] | [.function, .status]]}' repair.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Browser end to end (New Run → Workbench → Repair → Diff → Report, then demo mode)
+        run: |
+          # A fresh stand-in model, so it answers with the gutted patch first again.
+          pkill -f fake-model.mjs || true
+          node packages/server/test/fake-model.mjs packages/core/test/fixtures/c/arith.c 4011 &
+          sleep 1
+          BASE_URL=http://127.0.0.1:3000 npm run e2e
       - name: Container logs
         if: always()
         run: docker logs vw || true

@@ -216,6 +216,10 @@ export interface RepairRequest extends Omit<VerifyRequest, 'functions'> {
 export interface DiffLine {
   type: '+' | '-' | ' ' | '@';
   text: string;
+  /** 1-based line in the old file (context and removed lines). */
+  oldLine?: number;
+  /** 1-based line in the new file (context and added lines). */
+  newLine?: number;
 }
 
 /** Why a candidate patch was refused before it could count. */
@@ -284,6 +288,8 @@ export interface RepairResult {
   iterations: RepairIteration[];
   rationale?: string;
   finalCode?: string;
+  /** Verification of `finalCode`, as the loop ran it. */
+  finalResult?: VerifyResult;
   diff?: DiffLine[];
   remaining?: number;
   engineLabel?: string;

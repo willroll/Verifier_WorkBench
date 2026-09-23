@@ -49,10 +49,17 @@ describe('repair loop', () => {
     expect(result.finalCode).toContain('return (int32_t)(((int64_t)a + b) / 2);');
     expect(result.finalCode).toContain('if (idx < 16) {');
     expect(result.diff?.filter((d) => d.type !== ' ' && d.type !== '@')).toEqual([
-      { type: '-', text: '    return (a + b) / 2;' },
-      { type: '+', text: '    return (int32_t)(((int64_t)a + b) / 2);' },
-      { type: '-', text: '    if (idx <= 16) {' },
-      { type: '+', text: '    if (idx < 16) {' },
+      { type: '-', text: '    return (a + b) / 2;', oldLine: 5 },
+      { type: '+', text: '    return (int32_t)(((int64_t)a + b) / 2);', newLine: 5 },
+      { type: '-', text: '    if (idx <= 16) {', oldLine: 12 },
+      { type: '+', text: '    if (idx < 16) {', newLine: 12 },
+    ]);
+    // The accepted code's own verification comes with the result.
+    expect(result.finalResult?.counts).toEqual({ proved: 3, refuted: 0, inconclusive: 0 });
+    expect(result.finalResult?.functions.map((f) => [f.name, f.status])).toEqual([
+      ['avg', 'proved'],
+      ['store', 'proved'],
+      ['clamp', 'no-obligations'],
     ]);
     expect(result.equivalence?.map((e) => [e.function, e.status])).toEqual([
       ['avg', 'equivalent'],

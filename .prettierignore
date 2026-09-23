@@ -6,5 +6,6 @@ hosted-example/
 *.md
 package-lock.json
 packages/*/test/fixtures/
+packages/web/src/demo/
 dist/
 coverage/

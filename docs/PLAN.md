@@ -26,7 +26,7 @@ then the UI rebuild at design fidelity, then hosting hardening and product expan
 | 0 Foundation | **Done.** npm-workspaces TypeScript monorepo, ESLint, Prettier, Vitest, GitHub Actions (check, real engines, Docker smoke test). |
 | 1 Truthful verification | **Done.** V1–V4 and V6–V8 are fixed and pinned by tests. The solver choice and SMT-LIB export are real (D3). The prototype UI runs against the new server. |
 | 2 Ungameable repair | **Done.** V5, V6 and V11 are fixed and pinned by replayed and live tests. `/api/repair` (plus an SSE variant) runs a guarded loop whose accepted patches are re-verified and proved behavior-preserving. `GET /api/providers` lists Claude, ChatGPT, Gemini and self-hosted. |
-| 3 UI rebuild | **Next.** |
+| 3 UI rebuild | **Done.** A React + Vite web app (`packages/web`) replaces the prototype at `/` and runs New Run → Workbench → Repair → Diff → Report → Revert on real results. The prototype stays at `/prototype`. |
 | 4–5 | Not started. |
 
 Two things from the Phase 1 build changed the design:
@@ -40,6 +40,16 @@ The Phase 2 build changed the plan in these ways:
 - **More guards than planned.** Each closes a way to reach "proved" without fixing the code, found while building the loop: calls that end the program (CBMC treats `abort()`/`exit()` as a path that stops), `#define NDEBUG` or a redefined `assert`, macros that redefine existing names or keywords (the proof is compiled after the patch), `_Pragma` and inline assembly, a candidate that turns decided obligations into inconclusive ones (an added loop past the bound), and a behavior proof that does not finish or cannot be built.
 - **Baseline rule: strictly fewer.** A candidate replaces the current best only with strictly fewer refuted obligations, and only after passing every guard including the behavior proof; the result is `repaired` only when nothing is refuted and nothing new is inconclusive.
 - **Known limits of the behavior proof.** Functions with pointer or aggregate parameters or results, variadic functions and functions that reach a body-less function are listed as `skipped`; for them, a function whose checks all vanished is still rejected. Function-local `static` state is not compared, and each call starts from the globals' initial values.
+
+The Phase 3 build changed the plan in these ways:
+
+- **Runs live in the browser until Phase 4.** The last 20 runs are kept in `localStorage`. A repaired patch becomes a new run linked to its original, so Revert returns to the unpatched source and its findings, and Re-verify runs the checker again as a new run.
+- **Demo mode is a recording, not canned data.** `npm run record-demo` verifies the sample with CBMC and Z3 and runs the real repair loop with scripted answers: a gutted `store` that the behavior proof rejects, then the fix. With no server reachable, `/` replays it, labelled as recorded.
+- **Unbuilt features say so.** The MISRA view and tab say the rules are not checked, and the MISRA rule sets cannot be selected. Problem Sets lists this browser's runs; batch upload is not built. The prototype's canned chips, the demo F-01 shown for live runs, the fake "Apply patch" and the non-restoring Revert are gone.
+- **The prototype's own font files.** Google Fonts serves IBM Plex Sans as a variable font, and the static cut from npm sets 600-weight text about 5% narrower, so the web app ships the prototype's files (latin and latin-ext, SIL OFL). Text now measures identically.
+- **Visual QA.** On a run seeded with the prototype's header values, the top bar, project tree labels, source header and detail tabs are pixel-identical to the prototype (0.00% of pixels differ) in both themes at 1440×900. The rest differs only in content: live results instead of canned ones, the run banner, line numbers from 1.
+- **Accessibility.** axe reports no violations except colour contrast. Several design tokens are below WCAG AA: light-theme muted text on the page (3.3:1) and on the run chip (3.0:1), `#767a6b` on the code surface (3.5:1), line numbers (2.5:1), the refuted chip (3.8:1). They are kept as designed; raising them is a design decision.
+- **Model answers keep the file's layout.** The prompt fences the code, which loses the final newline and line endings; the loop now restores the original's, so a diff shows only real changes.
 
 ## 1. What's in the repo
 
@@ -171,7 +181,7 @@ every phase has a working end-to-end demo.
 - **Progress.** `POST /api/repair/stream` sends `checking`, `proposing`, `iteration` and `result` events; a client that disconnects cancels the repair and its model request. `REPAIR_CONCURRENCY` bounds concurrent repairs (429 beyond it).
 - **Exit (met):** in `packages/core/test/repair.test.ts`, the design prototype's fix makes no progress, its overflow-free variant and a gutted `store` are rejected by the behavior proof with counterexamples, `__CPROVER_assume` and a widened signature are rejected, and the honest fix is accepted as `repaired` with both functions proved equivalent. CI repeats this inside the Docker image with a scripted model.
 
-### Phase 3: UI rebuild at design fidelity
+### Phase 3: UI rebuild at design fidelity *(done)*
 - Implement the tokens as CSS custom properties exactly per the `docs/design-handoff.md` spec, in light and dark. Use IBM Plex Sans and Mono, with no shadows or gradients.
 - Routes: `/new`, `/runs/:id` (Workbench), `/runs/:id/report`, `/misra`, `/batch`.
 - Components:
@@ -190,7 +200,7 @@ every phase has a working end-to-end demo.
 - Revert restores the pre-patch source, and Re-verify runs the checker. Demo mode replays a recorded real run with a correct fix.
 - Use semantic buttons, keyboard navigation, and visible focus states.
 - For visual QA, capture Playwright screenshots of the new UI and the prototype at the same viewport, in both themes, and compare them.
-- **Exit:** The full flow (New Run → Workbench → Repair → Diff → Report) runs on real data and looks nearly pixel-identical to the prototype.
+- **Exit (met):** `packages/web/e2e/flow.mjs` drives Chromium through New Run → Workbench → Repair → Diff → Report → Revert against the real checker, and through demo mode with no server; CI runs it against the Docker image. See *Progress* for the pixel comparison.
 
 ### Phase 4: Hosting hardening
 - Remove `/api/complete`. If an "explain this finding" feature is wanted, build its prompt on the server.
@@ -205,7 +215,7 @@ every phase has a working end-to-end demo.
   - run as non-root;
   - add a healthcheck;
   - give the checker no network access.
-- Persist runs in SQLite, which gives run history and real run IDs (the design's `run #142` chip).
+- Persist runs in SQLite, which gives run history and real run IDs (the design's `run #142` chip), and move the web app's run history from `localStorage` to the server.
 - Add auth, at minimum a shared token, before any public deployment.
 
 ### Phase 5: Expansion (to prioritize together)
@@ -220,7 +230,7 @@ every phase has a working end-to-end demo.
 | # | Decision | Outcome |
 |---|---|---|
 | D1 | Stack | TypeScript monorepo (npm workspaces): Node 22 + TS for the server, React + Vite + TS for the web app. TypeScript is pinned to 6.0.x, because typescript-eslint does not support TypeScript 7 yet. |
-| D2 | Order | Backend truthfulness (Phases 1–2) comes before the full UI rebuild. Meanwhile, the new server serves the existing prototype UI. |
+| D2 | Order | Backend truthfulness (Phases 1–2) comes before the full UI rebuild. Until Phase 3 the server served the prototype UI; it now serves the web app, with the prototype at `/prototype`. |
 | D3 | SMT-LIB identity | **Make it real.** The solver picker maps to real solver back ends, and each obligation can be exported as SMT-LIB that any solver can re-check. |
 | D4 | LLM providers | Keep all four (Claude, Gemini, ChatGPT, self-hosted), with Claude as the default. |
 | D5 | Deployment | **SaaS on a server is the target; a local install may also be offered.** The details are still open, so the design keeps both options (see below). |

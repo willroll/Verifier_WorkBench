@@ -10,6 +10,7 @@
     "start": "node dist/server.mjs"
   },
   "dependencies": {
+    "@fastify/static": "^10.1.4",
     "@verifier/core": "*",
     "@verifier/llm": "*",
     "@verifier/shared": "*",

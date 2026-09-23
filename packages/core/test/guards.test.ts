@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Counts, Finding, FunctionSummary, VerifyResult } from '@verifier/shared';
 import type { FunctionInfo } from '../src/engines/types';
-import { hunks, lineDiff } from '../src/repair/diff';
+import { hunks, lineDiff, sameLayout } from '../src/repair/diff';
 import {
   changedFunctions,
   globalsRejection,
@@ -294,10 +294,12 @@ describe('diff', () => {
     const after = ['a', 'B', 'c', 'd', 'e', 'f', 'g', 'h', 'i'].join('\n');
     const d = lineDiff(before, after);
     expect(d.filter((x) => x.type !== ' ')).toEqual([
-      { type: '-', text: 'b' },
-      { type: '+', text: 'B' },
-      { type: '+', text: 'i' },
+      { type: '-', text: 'b', oldLine: 2 },
+      { type: '+', text: 'B', newLine: 2 },
+      { type: '+', text: 'i', newLine: 9 },
     ]);
+    // Context lines know both positions.
+    expect(d.find((x) => x.text === 'h')).toEqual({ type: ' ', text: 'h', oldLine: 8, newLine: 8 });
     expect(hunks(d, 1).map((x) => (x.type === '@' ? '@@' : `${x.type}${x.text}`))).toEqual([
       ' a',
       '-b',
@@ -306,6 +308,17 @@ describe('diff', () => {
       '@@',
       ' h',
       '+i',
+    ]);
+  });
+
+  it("gives a model's answer the original's line endings and final newline", () => {
+    expect(sameLayout('a\nb', 'a\nB\n')).toBe('a\nB');
+    expect(sameLayout('a\nb\n', 'a\nB')).toBe('a\nB\n');
+    expect(sameLayout('a\r\nb\r\n', 'a\nB')).toBe('a\r\nB\r\n');
+    expect(sameLayout('a\nb\n', 'a\r\nB\r\n\n\n')).toBe('a\nB\n');
+    expect(lineDiff('a\nb', sameLayout('a\nb', 'a\nB\n')).filter((x) => x.type !== ' ')).toEqual([
+      { type: '-', text: 'b', oldLine: 2 },
+      { type: '+', text: 'B', newLine: 2 },
     ]);
   });
 

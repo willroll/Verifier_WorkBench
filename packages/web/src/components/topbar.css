@@ -1,0 +1,131 @@
+/* Top bar: design-handoff.md "Top bar". */
+.tb {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.tb-title {
+  font: 600 14px var(--sans);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tb-slash {
+  color: var(--muted);
+}
+.tb-run {
+  font: 500 11px var(--mono);
+  color: var(--muted);
+  background: var(--chipbg);
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tb-nav {
+  display: flex;
+  gap: 4px;
+  margin-left: 10px;
+  flex-shrink: 0;
+}
+.tb-tab {
+  font: 600 12px var(--sans);
+  padding: 6px 12px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--muted);
+  background: transparent;
+  text-decoration: none;
+}
+.tb-tab:hover {
+  color: var(--text);
+}
+.tb-tab[aria-current='page'] {
+  color: var(--text);
+  background: var(--chipbg);
+}
+.tb-right {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.chip {
+  font: 600 11px var(--mono);
+  padding: 3px 9px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.chip-red {
+  color: var(--red);
+  background: var(--redbg);
+}
+.chip-green {
+  color: var(--green);
+  background: var(--greenbg);
+}
+.chip-amber {
+  color: var(--amber);
+  background: var(--amberbg);
+}
+.tb-theme {
+  font: 500 13px var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: normal;
+}
+.tb-primary {
+  font: 600 11.5px var(--sans);
+  color: var(--btntext);
+  background: var(--btn);
+  padding: 5px 14px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: normal;
+}
+.tb-primary:disabled {
+  opacity: 0.55;
+}
+.tb-error {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 9px 20px;
+  font: 400 11.5px/1.6 var(--mono);
+  color: var(--red);
+  background: var(--redbg);
+  border-bottom: 1px solid var(--redborder);
+  white-space: pre-wrap;
+}
+.tb-error-close {
+  margin-left: auto;
+  font: 500 11px var(--sans);
+  color: var(--accent);
+}
+
+/* Phones: the nav tabs wrap instead of pushing the page sideways. */
+@media (max-width: 560px) {
+  .tb {
+    padding: 12px 16px;
+  }
+  .tb-nav {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    margin-left: -12px;
+  }
+  .tb-right {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+}

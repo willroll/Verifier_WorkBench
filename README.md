@@ -11,11 +11,11 @@ A model can propose fixes, and a fix counts only when the checker proves both
 that it removes the defects and that it changes nothing else (see
 [Verified repair](#verified-repair)).
 
-**Status:** Phases 0–2 of [`docs/PLAN.md`](docs/PLAN.md) are done: truthful
-verification, real solver back ends, SMT-LIB export, and the verified repair
-loop. The prototype UI from the Claude Design handoff
-([`docs/design-handoff.md`](docs/design-handoff.md)) is served as-is until the
-React rebuild (Phase 3).
+**Status:** Phases 0–3 of [`docs/PLAN.md`](docs/PLAN.md) are done: truthful
+verification, real solver back ends, SMT-LIB export, the verified repair loop,
+and the [web app](#web-app) rebuilt from the Claude Design handoff
+([`docs/design-handoff.md`](docs/design-handoff.md)). The original prototype
+stays at `/prototype` for comparison.
 
 ## Quick start
 
@@ -40,7 +40,14 @@ Apple silicon, add `--platform linux/amd64` to both commands.
 
 ```bash
 npm install
-npm run dev        # API + prototype UI on http://127.0.0.1:3000
+npm run build && npm start   # web app + API on http://127.0.0.1:3000
+```
+
+For UI work, run the API and the Vite dev server side by side:
+
+```bash
+npm run dev        # API on :3000, restarting on change
+npm run dev:web    # web app on http://127.0.0.1:5173, with /api proxied to :3000
 ```
 
 ## What "proved" means here
@@ -122,6 +129,35 @@ the API retries it on the model Anthropic recommends for that category. Set
 `CLAUDE_REPAIR_FALLBACKS=off` to disable them. ChatGPT, Gemini and any OpenAI-compatible
 self-hosted server (vLLM, Ollama, LM Studio, llama.cpp) work too.
 
+## Web app
+
+React and Vite, in [`packages/web`](packages/web). The server serves the built
+files at `/`: hashed assets are cached for good, and pages get a strict
+Content-Security-Policy (scripts, styles and fonts from the same origin only).
+
+| Route | View |
+|---|---|
+| `/new` | New Run: paste or drop a `.c` / `.h` file; choose engine, solver and loop bound |
+| `/runs/:id` | Workbench: functions, source with finding markers or the patch diff, findings, the repair agent, and the selected finding's counterexample and SMT-LIB |
+| `/runs/:id/report` | Printable verification report (print or save as PDF) |
+| `/misra` | MISRA status: the rules are not checked yet, and the page says so |
+| `/batch` | Problem sets: the runs in this browser (batch upload is not built yet) |
+
+- **Runs live in the browser that made them** (the last 20, in `localStorage`)
+  until accounts arrive (Phase 4). A repaired patch becomes a new run linked to
+  its original, so Revert returns to the unpatched source and its findings.
+- **Demo mode.** With no server reachable, `/` opens a recorded run of the
+  sample, labelled as recorded. It holds real CBMC results and a real repair
+  loop with scripted model answers: one patch the behavior proof rejects, then
+  the fix. `npm run record-demo` re-records it with the installed CBMC and Z3.
+- **Design fidelity.** Tokens, type and layout follow the handoff, in light and
+  dark. IBM Plex ships with the app: the same files the prototype embeds (SIL
+  Open Font License).
+- **Accessibility.** Controls are real buttons and links, tabs and option groups
+  follow the ARIA patterns with arrow keys, and focus is always visible. axe
+  reports nothing but colour contrast, where a few of the design's tokens are
+  below WCAG AA (see `docs/PLAN.md`, Phase 3).
+
 ## API
 
 Types: [`packages/shared/src/index.ts`](packages/shared/src/index.ts).
@@ -155,7 +191,8 @@ jq -n --rawfile code packages/core/test/fixtures/c/arith.c '{code: $code, fileNa
 |---|---|---|
 | `PORT` / `HOST` | `3000` / `127.0.0.1` | The Docker image listens on `0.0.0.0` |
 | `BODY_LIMIT_BYTES` | 512 KiB | Request body limit |
-| `UI_HTML` | the design bundle | Prototype UI to serve at `/`; empty = API only |
+| `WEB_DIST` | `packages/web/dist`, if built | Web app to serve at `/`; empty = none |
+| `UI_HTML` | the design bundle | Prototype to serve at `/prototype` (and at `/` without a web app); empty = none |
 | `LOG_LEVEL` | `info` | |
 
 **Verification**
@@ -200,12 +237,13 @@ such as `CLAUDE_EFFORT`.
 ## Layout
 
 ```
-packages/shared   API contract (types only; also used by the web app later)
+packages/shared   API contract (types only; shared by the server and the web app)
 packages/core     verification core: engine adapters, harnesses, runner, SMT-LIB export,
                   and the repair loop (repair/: guards, behavior proof, prompts)
 packages/llm      model providers: Claude (official SDK), OpenAI-compatible, Gemini
-packages/server   Fastify API; serves the prototype UI
-design/           Claude Design prototype (reference; replaced in Phase 3)
+packages/server   Fastify API; serves the web app, and the prototype at /prototype
+packages/web      React web app: New Run, Workbench, Report, MISRA, Problem Sets
+design/           Claude Design prototype (reference)
 hosted-example/   the handoff's original backend (reference; superseded by packages/)
 docs/             plan and the design handoff spec
 ```
@@ -216,6 +254,7 @@ docs/             plan and the design handoff spec
 npm run check             # format, lint, typecheck, all tests
 npm test                  # unit + replay tests; integration tests skip if engines are missing
 npm run record-fixtures   # re-record engine output after changing any engine command line
+npm run e2e               # the web app in a real browser, against a running server (below)
 ```
 
 - **Replay tests.** Recorded CBMC and ESBMC runs are replayed through the full
@@ -231,6 +270,18 @@ npm run record-fixtures   # re-record engine output after changing any engine co
 - **Model providers** are tested against a fake SDK client and a fake `fetch`.
   `packages/server/test/fake-model.mjs` stands in for a self-hosted model. CI
   uses it to run a repair inside the Docker image.
+- **Web app.** Unit tests cover the Workbench's view of a run, formatting, the
+  highlighter, the router and the repair stream client, on the recorded demo
+  run. [`packages/web/e2e/flow.mjs`](packages/web/e2e/flow.mjs) drives Chromium
+  through New Run → Workbench → Repair → Diff → Report → Revert and through
+  demo mode. CI runs it against the Docker image; locally:
+
+  ```bash
+  node packages/server/test/fake-model.mjs packages/core/test/fixtures/c/arith.c 4011 &
+  npm run build && LLM_PROVIDER=custom LLM_BASE_URL=http://127.0.0.1:4011/v1 npm start &
+  npx playwright install chromium   # once
+  BASE_URL=http://127.0.0.1:3000 npm run e2e
+  ```
 
 ## Security
 
@@ -244,6 +295,9 @@ Submitted C is untrusted.
   it, and the behavior proof analyzes it symbolically.
 - **Keys stay on the server.** `/api/providers` reports whether a provider is
   configured, never the key.
+- **Web app.** Pages allow no inline script or style and no other origin, and
+  cannot be framed. Runs, source included, stay in the browser; the server
+  stores none.
 - **Repairs spend model tokens.** `REPAIR_CONCURRENCY` bounds how many run at
   once, but there is no authentication or quota yet (Phase 4). Do not expose a
   server that has a model key to the internet.

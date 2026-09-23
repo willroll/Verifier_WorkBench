@@ -22,7 +22,7 @@ afterEach(async () => {
 async function appFor(recordingName: string, proposer?: Proposer, repairConcurrency = 2, env = {}) {
   const recording = loadRecording(recordingPath(recordingName));
   const app = await buildApp({
-    server: { ...loadServerConfig({}), uiHtml: null, repairConcurrency },
+    server: { ...loadServerConfig({}), uiHtml: null, webDist: null, repairConcurrency },
     core: loadConfig({}),
     llm: loadLlmConfig(env),
     runner: new ReplayRunner(recording.runs),

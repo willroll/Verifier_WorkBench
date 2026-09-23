@@ -17,7 +17,7 @@ import {
   type DetailedVerification,
   type VerifierDeps,
 } from '../verify';
-import { patchOf } from './diff';
+import { patchOf, sameLayout } from './diff';
 import { checkEquivalence } from './equivalence';
 import {
   behaviorRejection,
@@ -177,7 +177,7 @@ export async function repair(
       continue;
     }
     model = proposal.model;
-    const code = proposal.code;
+    const code = sameLayout(req.code, proposal.code);
     const attempt: RepairIteration = {
       iter,
       kind: 'repair',
@@ -261,6 +261,7 @@ export async function repair(
         model,
         rationale: proposal.rationale,
         finalCode: code,
+        finalResult: c,
         diff: patchOf(req.code, code),
         remaining: 0,
         equivalence: eq.results,
@@ -289,6 +290,7 @@ export async function repair(
     ...(improved
       ? {
           finalCode: best.code,
+          finalResult: best.result,
           diff: patchOf(req.code, best.code),
           equivalence: best.equivalence,
           ...(best.rationale ? { rationale: best.rationale } : {}),
