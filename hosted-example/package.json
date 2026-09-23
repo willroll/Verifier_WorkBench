@@ -1,0 +1,12 @@
+{
+  "name": "verifier-workbench-hosted",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hosted example of the SMTLib Code Verification Agent MVP with live repair via Claude, Gemini, ChatGPT, or a self-hosted LLM.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

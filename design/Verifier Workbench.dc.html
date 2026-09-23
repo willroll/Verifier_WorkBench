@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<template id="__bundler_thumbnail">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#23221e"/>
+  <text x="256" y="248" font-family="'IBM Plex Mono',monospace" font-size="150" font-weight="600" fill="#8fa8c8" text-anchor="middle">∀</text>
+  <text x="256" y="352" font-family="'IBM Plex Sans',sans-serif" font-size="58" font-weight="600" fill="#f6f5f1" text-anchor="middle">Verifier</text>
+</svg>
+</template>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif}
+a{color:#2a5db0}a:hover{color:#1d4685}
+.vw-root{--bg:#f6f5f1;--panel:#fbfaf7;--border:#e2e0d8;--border2:#efeee7;--text:#23221e;--muted:#8a887c;--chipbg:#ecebe4;--red:#a23b2e;--redbg:#f6e3df;--redborder:#dfb5ac;--green:#3f7a4e;--greenbg:#e2ecdf;--amber:#7a5c26;--amberbg:#efe7d8;--btn:#23221e;--btntext:#ffffff;--accent:#2a5db0}
+.vw-root.dark{--bg:#141513;--panel:#1d1e1a;--border:#2c2e29;--border2:#262823;--text:#d9dccf;--muted:#8b907f;--chipbg:#262823;--red:#c96f5f;--redbg:#3a2a26;--redborder:#5a3b34;--green:#7fae86;--greenbg:#243026;--amber:#d3b56a;--amberbg:#332c1c;--btn:#d9dccf;--btntext:#141513;--accent:#8fa8c8}
+@media print{.vw-noprint{display:none !important}.vw-report{padding:0 !important}body{background:#fff}}
+</style>
+</helmet>
+<div class="vw-root {{ themeClass }}" style="min-height:100vh;background:var(--bg);color:var(--text)">
+  <div style="display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;row-gap:8px">
+    <div style="font:600 14px 'IBM Plex Sans',sans-serif;white-space:nowrap;flex-shrink:0">Verifier<span style="color:var(--muted)">&thinsp;/&thinsp;</span>{{ fileLabel }}</div>
+    <div style="font:500 11px 'IBM Plex Mono',monospace;color:var(--muted);background:var(--chipbg);padding:3px 8px;border-radius:4px;white-space:nowrap;flex-shrink:0">{{ runChip }}</div>
+    <div style="display:flex;gap:4px;margin-left:10px;flex-shrink:0">
+      <div style="font:600 12px 'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:5px;cursor:pointer;white-space:nowrap;flex-shrink:0;color:{{ navInputC }};background:{{ navInputBg }}" onClick="{{ goInput }}">New Run</div>
+      <div style="font:600 12px 'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:5px;cursor:pointer;white-space:nowrap;flex-shrink:0;color:{{ navWorkC }};background:{{ navWorkBg }}" onClick="{{ goWork }}">Workbench</div>
+      <div style="font:600 12px 'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:5px;cursor:pointer;white-space:nowrap;flex-shrink:0;color:{{ navMisraC }};background:{{ navMisraBg }}" onClick="{{ goMisra }}">MISRA Report</div>
+      <div style="font:600 12px 'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:5px;cursor:pointer;white-space:nowrap;flex-shrink:0;color:{{ navBatchC }};background:{{ navBatchBg }}" onClick="{{ goBatch }}">Problem Sets</div>
+      <div style="font:600 12px 'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:5px;cursor:pointer;white-space:nowrap;flex-shrink:0;color:{{ navReportC }};background:{{ navReportBg }}" onClick="{{ goReport }}">Report</div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-shrink:0">
+      <div style="font:600 11px 'IBM Plex Mono',monospace;color:var(--red);background:var(--redbg);padding:3px 9px;border-radius:4px;white-space:nowrap;flex-shrink:0">{{ refutedChip }}</div>
+      <div style="font:600 11px 'IBM Plex Mono',monospace;color:var(--green);background:var(--greenbg);padding:3px 9px;border-radius:4px;white-space:nowrap;flex-shrink:0">{{ provedChip }}</div>
+      <div style="font:500 13px 'IBM Plex Mono',monospace;color:var(--muted);border:1px solid var(--border);padding:3px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;flex-shrink:0" onClick="{{ toggleTheme }}">{{ themeIcon }}</div>
+      <div style="font:600 11.5px 'IBM Plex Sans',sans-serif;color:var(--btntext);background:var(--btn);padding:5px 14px;border-radius:5px;cursor:pointer;white-space:nowrap;flex-shrink:0" onClick="{{ reverify }}">{{ verifyLabel }}</div>
+    </div>
+  </div>
+
+  <!-- ============ Code entry ============ -->
+  <div style="display:{{ showInput }};max-width:1000px;margin:0 auto;padding:34px 32px 48px">
+    <div style="font:600 18px 'IBM Plex Sans',sans-serif">New verification run</div>
+    <div style="font:400 12.5px/1.6 'IBM Plex Sans',sans-serif;color:var(--muted);margin-top:4px;max-width:640px">Paste C source or drop a file. The agent generates verification conditions, discharges them with the selected solver, and checks the MISRA rule set — reporting counterexamples for anything it can refute.</div>
+    <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:20px;margin-top:20px;align-items:start">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <input value="{{ fileName }}" onInput="{{ onFileName }}" style="font:500 12px 'IBM Plex Mono',monospace;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:5px 9px;width:150px;outline:none" />
+          <div style="font:400 11px 'IBM Plex Mono',monospace;color:var(--muted)">{{ srcMeta }}</div>
+          <div style="margin-left:auto;font:500 11px 'IBM Plex Sans',sans-serif;color:var(--accent);cursor:pointer" onClick="{{ loadSample }}">Load sample</div>
+        </div>
+        <textarea value="{{ code }}" onInput="{{ onCode }}" spellcheck="false" style="width:100%;box-sizing:border-box;height:340px;resize:vertical;background:#232420;color:#c6c9ba;border:1px solid var(--border);border-radius:7px;padding:14px 16px;font:400 12.5px/1.7 'IBM Plex Mono',monospace;outline:none;tab-size:4"></textarea>
+        <div style="margin-top:10px;border:1.5px dashed var(--border);border-radius:7px;padding:14px;text-align:center;font:400 11.5px 'IBM Plex Sans',sans-serif;color:var(--muted)">Drop a <span style="font-family:'IBM Plex Mono',monospace">.c</span> / <span style="font-family:'IBM Plex Mono',monospace">.h</span> file here, or browse — prototype uses the pasted source above</div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px 18px">
+        <div style="font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.08em">RULE SET</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+          <sc-for list="{{ ruleOpts }}" as="o" hint-placeholder-count="3">
+            <div style="font:500 12px 'IBM Plex Sans',sans-serif;padding:7px 11px;border-radius:6px;cursor:pointer;color:{{ o.c }};background:{{ o.bg }};border:1px solid {{ o.bd }}" onClick="{{ o.click }}">{{ o.label }}</div>
+          </sc-for>
+        </div>
+        <div style="font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.08em;margin-top:16px">ENGINE</div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <sc-for list="{{ engineOpts }}" as="o" hint-placeholder-count="2">
+            <div style="flex:1;text-align:center;font:500 12px 'IBM Plex Mono',monospace;padding:7px 0;border-radius:6px;cursor:pointer;color:{{ o.c }};background:{{ o.bg }};border:1px solid {{ o.bd }}" onClick="{{ o.click }}">{{ o.label }}</div>
+          </sc-for>
+        </div>
+        <div style="font:400 11px/1.5 'IBM Plex Sans',sans-serif;color:{{ engineNoteC }};margin-top:5px">{{ engineNote }}</div>
+        <div style="font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.08em;margin-top:16px">SOLVER</div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <sc-for list="{{ solverOpts }}" as="o" hint-placeholder-count="2">
+            <div style="flex:1;text-align:center;font:500 12px 'IBM Plex Mono',monospace;padding:7px 0;border-radius:6px;cursor:pointer;color:{{ o.c }};background:{{ o.bg }};border:1px solid {{ o.bd }}" onClick="{{ o.click }}">{{ o.label }}</div>
+          </sc-for>
+        </div>
+        <div style="font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.08em;margin-top:16px">ENCODING</div>
+        <div style="font:500 12px 'IBM Plex Mono',monospace;color:var(--text);margin-top:6px">QF_BV · bit-precise</div>
+        <div style="font:400 11px/1.5 'IBM Plex Sans',sans-serif;color:var(--muted);margin-top:2px">Integers modelled as 32/8-bit vectors to catch overflow &amp; wrap-around.</div>
+        <div style="font:600 12.5px 'IBM Plex Sans',sans-serif;color:var(--btntext);background:var(--btn);padding:9px 0;border-radius:6px;text-align:center;cursor:pointer;margin-top:18px" onClick="{{ runVerify }}">{{ runBtnLabel }}</div>
+        <div style="display:{{ showInputProg }};font:400 11.5px/1.7 'IBM Plex Mono',monospace;color:var(--muted);margin-top:12px">▸ {{ engineLabel }} parsing {{ fileName }}…<br>▸ generating obligations<br>▸ {{ solverLabel }} · QF_BV running…</div>
+        <div style="display:{{ showVerifyErr }};font:400 11.5px/1.6 'IBM Plex Mono',monospace;color:var(--red);background:var(--redbg);border:1px solid var(--redborder);border-radius:6px;padding:9px 11px;margin-top:12px;white-space:pre-wrap">{{ verifyErr }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Workbench ============ -->
+  <div style="display:{{ showWork }}">
+    <div style="display:{{ showSubCrumb }};align-items:center;gap:8px;padding:8px 20px;border-bottom:1px solid var(--border);background:var(--chipbg);font:500 11.5px 'IBM Plex Sans',sans-serif;color:var(--muted)"><span style="cursor:pointer;color:var(--accent)" onClick="{{ backToBatch }}">◀ Problem set 3</span><span>/</span><span style="font-family:'IBM Plex Mono',monospace;color:var(--text)">{{ subCrumb }}</span></div>
+    <div style="display:grid;grid-template-columns:186px minmax(0,1.25fr) minmax(0,1fr) minmax(0,1.15fr);min-height:calc(100vh - 55px)">
+      <div style="background:var(--panel);border-right:1px solid var(--border);padding:14px 0">
+        <div style="padding:0 16px 8px;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.08em">PROJECT</div>
+        <sc-for list="{{ treeFiles }}" as="t" hint-placeholder-count="3">
+          <div style="padding:5px 16px;font:500 12px 'IBM Plex Mono',monospace;color:{{ t.c }};background:{{ t.bg }};cursor:pointer" onClick="{{ t.click }}">{{ t.icon }} {{ t.name }}</div>
+        </sc-for>
+        <div style="padding:12px 16px 8px;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.08em">FUNCTIONS · arith.c</div>
+        <sc-for list="{{ treeFns }}" as="fn" hint-placeholder-count="4">
+          <div style="padding:5px 16px;font:500 12px 'IBM Plex Mono',monospace;color:{{ fn.c }};background:{{ fn.bg }};cursor:{{ fn.cursor }};display:flex;align-items:center;gap:7px" onClick="{{ fn.click }}"><span style="color:{{ fn.markC }}">{{ fn.mark }}</span>{{ fn.name }}</div>
+        </sc-for>
+      </div>
+      <div style="background:#232420;padding:16px 0;font:400 12.5px/1.9 'IBM Plex Mono',monospace;color:#c6c9ba">
+        <div style="display:flex;align-items:center;padding:0 18px 10px;gap:10px">
+          <span style="color:#767a6b;font-size:10.5px;letter-spacing:.08em">SOURCE · {{ srcHeaderName }} {{ patchedTag }}</span>
+          <span style="margin-left:auto;display:flex;gap:2px">
+            <span style="font:600 10.5px 'IBM Plex Sans',sans-serif;padding:3px 9px;border-radius:4px;cursor:pointer;color:{{ srcTabC }};background:{{ srcTabBg }}" onClick="{{ srcModeSource }}">Source</span>
+            <span style="font:600 10.5px 'IBM Plex Sans',sans-serif;padding:3px 9px;border-radius:4px;cursor:pointer;color:{{ diffTabC }};background:{{ diffTabBg }}" onClick="{{ srcModeDiff }}">Diff</span>
+          </span>
+        </div>
+        <div style="display:{{ showSource }};overflow-x:auto">
+          <sc-for list="{{ codeLines }}" as="ln" hint-placeholder-count="13">
+            <div style="display:flex;align-items:flex-start;padding:0 18px;background:{{ ln.bg }};border-left:3px solid {{ ln.bar }};margin-left:-3px;cursor:{{ ln.cursor }}" onClick="{{ ln.click }}"><span style="flex:0 0 34px;color:#5d6154">{{ ln.n }}</span><span style="flex:0 0 auto;white-space:pre"><sc-for list="{{ ln.segs }}" as="s"><span style="color:{{ s.c }}">{{ s.t }}</span></sc-for></span><span style="flex:0 0 auto;color:{{ ln.markC }};white-space:pre">{{ ln.mark }}</span></div>
+          </sc-for>
+        </div>
+        <div style="display:{{ showDiff }};padding:0 18px">
+          <sc-for list="{{ diffLines }}" as="d" hint-placeholder-count="6">
+            <div style="background:{{ d.bg }};margin:0 -18px;padding:0 18px;color:{{ d.c }};white-space:pre">{{ d.t }}</div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border-right:1px solid var(--border);background:var(--panel)">
+        <div style="display:{{ showLiveRun }};margin:12px 12px 0;padding:10px 12px;border-radius:6px;background:var(--greenbg);border:1px solid var(--border)">
+          <div style="font:600 10px 'IBM Plex Mono',monospace;color:var(--green);letter-spacing:.06em">LIVE RUN</div>
+          <div style="font:400 11.5px/1.6 'IBM Plex Mono',monospace;color:var(--text);margin-top:3px">{{ liveRunLine }}</div>
+        </div>
+        <div style="padding:14px 18px 8px;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.08em">{{ findingsHeading }}</div>
+        <sc-for list="{{ findingCards }}" as="fc" hint-placeholder-count="2">
+          <div style="margin:0 12px 8px;padding:12px 14px;border-radius:6px;cursor:pointer;background:{{ fc.bg }};border:1px solid {{ fc.border }}" onClick="{{ fc.click }}">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 10px 'IBM Plex Mono',monospace;background:var(--red);color:var(--panel);padding:2px 6px;border-radius:3px;white-space:nowrap;flex-shrink:0">{{ fc.id }}</span><span style="font:600 12.5px 'IBM Plex Sans',sans-serif;color:var(--text)">{{ fc.title }}</span></div>
+            <div style="font:400 11px 'IBM Plex Mono',monospace;color:var(--muted);margin-top:5px">{{ fc.meta }}</div>
+          </div>
+        </sc-for>
+        <div style="display:{{ showNoFindings }};margin:0 12px 8px;padding:14px;border-radius:6px;background:var(--greenbg);font:500 12.5px 'IBM Plex Sans',sans-serif;color:var(--green)">✓ {{ noFindingsText }}</div>
+        <div style="padding:14px 18px 8px;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.08em">{{ provedHeading }}</div>
+        <div style="padding:0 18px;font:400 12px/2.1 'IBM Plex Mono',monospace;color:var(--green);white-space:pre-wrap">{{ provedList }}</div>
+        <div style="margin:14px 12px 12px;padding:12px 14px;border-radius:6px;background:var(--chipbg)">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font:600 11px 'IBM Plex Sans',sans-serif;color:var(--muted);flex-shrink:0">AGENT</span><span style="font:600 9.5px 'IBM Plex Mono',monospace;color:{{ aiBadgeC }};background:{{ aiBadgeBg }};padding:1px 6px;border-radius:3px;flex-shrink:0;white-space:nowrap">{{ aiBadge }}</span><span style="margin-left:auto;font:500 11px 'IBM Plex Sans',sans-serif;color:var(--accent);cursor:pointer;flex-shrink:0;white-space:nowrap;display:{{ showAskBtn }}" onClick="{{ askAgent }}">{{ askLabel }}</span></div>
+          <select value="{{ provider }}" onChange="{{ setProvider }}" style="width:100%;margin-top:7px;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:3px 4px;cursor:pointer"><sc-for list="{{ providerOptions }}" as="opt" hint-placeholder-count="4"><option value="{{ opt.value }}">{{ opt.label }}</option></sc-for></select>
+          <div style="display:{{ showSuggestion }}">
+            <div style="font:400 12px/1.55 'IBM Plex Sans',sans-serif;color:var(--text);margin-top:7px;white-space:pre-wrap">{{ suggestionText }}</div>
+            <div style="font:600 11.5px 'IBM Plex Sans',sans-serif;color:var(--btntext);background:var(--btn);padding:5px 12px;border-radius:5px;cursor:pointer;display:{{ showApplyBtn }};margin-top:9px" onClick="{{ applyPatch }}">Apply patch → re-run</div>
+          </div>
+          <div style="display:{{ showRunning }};font:400 12px/1.6 'IBM Plex Mono',monospace;color:var(--muted);margin-top:6px;white-space:pre-wrap">{{ runningLog }}</div>
+          <div style="display:{{ showRepairLog }}">
+            <sc-for list="{{ repairLog }}" as="r" hint-placeholder-count="3">
+              <div style="font:400 11.5px/1.7 'IBM Plex Mono',monospace;color:{{ r.c }}">{{ r.t }}</div>
+            </sc-for>
+            <div style="font:600 12px/1.45 'IBM Plex Sans',sans-serif;color:{{ repairVerdictC }};margin-top:8px">{{ repairVerdict }} <span style="color:var(--accent);cursor:pointer;display:{{ showRevert }}" onClick="{{ revertPatch }}">Revert</span></div>
+          </div>
+          <div style="display:{{ showPatched }}">
+            <div style="font:400 12px/1.7 'IBM Plex Mono',monospace;color:var(--muted);margin-top:6px">iter 1 · generate → verify · <span style="color:var(--red)">2 sat</span><br>iter 2 · repair → verify · <span style="color:var(--green)">7 unsat ✓</span></div>
+            <div style="font:600 12px 'IBM Plex Sans',sans-serif;color:var(--green);margin-top:7px">Verified — patch held. <span style="color:var(--accent);cursor:pointer" onClick="{{ revertPatch }}">Revert</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="background:var(--panel)">
+        <div style="display:flex;gap:2px;padding:12px 14px 0;border-bottom:1px solid var(--border);white-space:nowrap">
+          <div style="font:600 11.5px 'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:5px 5px 0 0;cursor:pointer;color:{{ tabTraceColor }};background:{{ tabTraceBg }}" onClick="{{ tabTrace }}">Trace</div>
+          <div style="font:600 11.5px 'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:5px 5px 0 0;cursor:pointer;color:{{ tabMisraColor }};background:{{ tabMisraBg }}" onClick="{{ tabMisra }}">MISRA</div>
+          <div style="font:600 11.5px 'IBM Plex Sans',sans-serif;padding:6px 12px;border-radius:5px 5px 0 0;cursor:pointer;color:{{ tabSmtColor }};background:{{ tabSmtBg }}" onClick="{{ tabSmt }}">SMT-LIB</div>
+        </div>
+        <div style="padding:16px 18px">
+          <div style="display:{{ showClean }};font:400 13px/1.7 'IBM Plex Sans',sans-serif;color:var(--muted)">All proof obligations discharged. Select the SMT-LIB tab on any past finding from the run log, or re-verify to reproduce.</div>
+          <div style="display:{{ showDetail }}">
+            <div style="font:600 13px 'IBM Plex Sans',sans-serif;color:var(--text);margin-bottom:10px">{{ findingTitle }}</div>
+            <div style="display:{{ showTrace }}">
+              <div style="border:1px solid var(--border);border-radius:5px;overflow:hidden;font:400 12px 'IBM Plex Mono',monospace">
+                <div style="display:grid;grid-template-columns:max-content 1fr;gap:10px;background:var(--chipbg);padding:7px 12px;color:var(--muted);font-size:10.5px;letter-spacing:.06em;white-space:nowrap"><div>VAR</div><div>VALUE</div></div>
+                <sc-for list="{{ traceRows }}" as="row" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:max-content 1fr;gap:10px;padding:7px 12px;border-top:1px solid var(--border2);color:var(--text);white-space:nowrap"><div>{{ row.v }}</div><div><div style="color:{{ row.color }}">{{ row.dec }}</div><div style="color:var(--muted);font-size:11px;margin-top:1px">{{ row.hex }}</div></div></div>
+                </sc-for>
+              </div>
+              <div style="font:400 12px/1.6 'IBM Plex Sans',sans-serif;color:var(--muted);margin-top:10px">{{ traceNote }}</div>
+            </div>
+            <div style="display:{{ showMisra }}">
+              <sc-for list="{{ misraRows }}" as="m" hint-placeholder-count="2">
+                <div style="border:1px solid var(--border);border-radius:5px;padding:10px 14px;margin-bottom:8px">
+                  <div style="display:flex;gap:8px;align-items:center"><span style="font:600 11px 'IBM Plex Mono',monospace;color:var(--amber);background:var(--amberbg);padding:2px 7px;border-radius:3px">{{ m.rule }}</span><span style="font:600 10.5px 'IBM Plex Sans',sans-serif;color:{{ m.sevColor }}">{{ m.sev }}</span></div>
+                  <div style="font:400 12px/1.55 'IBM Plex Sans',sans-serif;color:var(--text);margin-top:6px">{{ m.text }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:{{ showSmt }}">
+              <div style="background:#232420;border-radius:5px;padding:12px 16px;font:400 11.5px/1.8 'IBM Plex Mono',monospace;color:#c6c9ba;white-space:pre-wrap">{{ smtText }}</div>
+              <div style="font:400 11.5px 'IBM Plex Mono',monospace;color:var(--muted);margin-top:8px">logic QF_BV · result sat · model above ⌁ copy query</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MISRA report ============ -->
+  <div style="display:{{ showMisraView }};padding:26px 32px;max-width:1060px">
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="font:600 17px 'IBM Plex Sans',sans-serif">MISRA C:2012 compliance — arith.c</div>
+      <div style="font:500 11.5px 'IBM Plex Mono',monospace;color:var(--muted)">{{ misraSummary }}</div>
+    </div>
+    <div style="margin-top:16px;background:var(--panel);border:1px solid var(--border);border-radius:7px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:.9fr .8fr 2.6fr 1.1fr 1fr;gap:0 16px;padding:9px 16px;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--border)"><div>RULE</div><div>CATEGORY</div><div>REQUIREMENT</div><div>STATUS</div><div>LOCATION</div></div>
+      <sc-for list="{{ misraTable }}" as="r" hint-placeholder-count="9">
+        <div style="display:grid;grid-template-columns:.9fr .8fr 2.6fr 1.1fr 1fr;gap:0 16px;padding:10px 16px;border-bottom:1px solid var(--border2);font:400 12.5px 'IBM Plex Sans',sans-serif;color:var(--text)">
+          <div style="font-family:'IBM Plex Mono',monospace;font-weight:600">{{ r.rule }}</div>
+          <div style="color:{{ r.catColor }};font-weight:600;font-size:11px">{{ r.cat }}</div>
+          <div style="color:var(--muted)">{{ r.text }}</div>
+          <div><span style="font:600 10.5px 'IBM Plex Mono',monospace;color:{{ r.stC }};background:{{ r.stBg }};padding:2px 8px;border-radius:3px">{{ r.status }}</span></div>
+          <div style="font-family:'IBM Plex Mono',monospace;color:var(--muted)">{{ r.loc }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:12px;font:400 11.5px 'IBM Plex Sans',sans-serif;color:var(--muted)">Deviations require sign-off per MISRA Compliance:2020 §4. Rule set: MISRA C:2012 + Amendment 2, guided by Z3 counterexamples where decidable.</div>
+  </div>
+
+  <!-- ============ Problem sets ============ -->
+  <div style="display:{{ showBatchView }};padding:26px 32px;max-width:1100px">
+    <div style="display:flex;align-items:baseline;gap:14px">
+      <div style="font:600 17px 'IBM Plex Sans',sans-serif">Problem set 3 — batch verification</div>
+      <div style="font:500 11.5px 'IBM Plex Mono',monospace;color:var(--muted)">24 submissions · 10 graded · 14 queued · rubric: 7 VCs + MISRA mandatory/required</div>
+    </div>
+    <div style="margin-top:16px;background:var(--panel);border:1px solid var(--border);border-radius:7px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1.1fr 1fr .7fr .8fr .9fr .7fr .9fr;gap:0 16px;padding:9px 16px;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.06em;border-bottom:1px solid var(--border)"><div>SUBMISSION</div><div>STUDENT</div><div>VCs</div><div>REFUTED</div><div>MISRA</div><div>TIME</div><div>SCORE</div></div>
+      <sc-for list="{{ batchRows }}" as="b" hint-placeholder-count="10">
+        <div style="display:grid;grid-template-columns:1.1fr 1fr .7fr .8fr .9fr .7fr .9fr;gap:0 16px;padding:10px 16px;border-bottom:1px solid var(--border2);font:400 12.5px 'IBM Plex Mono',monospace;color:var(--text);cursor:pointer" style-hover="background:var(--chipbg)" onClick="{{ b.open }}">
+          <div>{{ b.id }}</div>
+          <div style="font-family:'IBM Plex Sans',sans-serif">{{ b.student }}</div>
+          <div style="color:var(--muted)">{{ b.vcs }}</div>
+          <div style="color:{{ b.refC }}">{{ b.refuted }}</div>
+          <div style="color:{{ b.misC }}">{{ b.misra }}</div>
+          <div style="color:var(--muted)">{{ b.time }}</div>
+          <div><span style="font:600 11px 'IBM Plex Mono',monospace;color:{{ b.scC }};background:{{ b.scBg }};padding:2px 8px;border-radius:3px">{{ b.score }}</span></div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:12px;font:400 11.5px 'IBM Plex Sans',sans-serif;color:var(--muted)">Click a row to open it in the Workbench (wired to the canned arith.c run in this prototype). Scores: 60% obligations proved · 40% MISRA compliance.</div>
+  </div>
+  <!-- ============ Report ============ -->
+  <div style="display:{{ showReportView }};background:var(--bg)" class="vw-report">
+    <div class="vw-noprint" style="display:flex;gap:10px;align-items:center;padding:14px 32px;border-bottom:1px solid var(--border)">
+      <div style="font:500 12px 'IBM Plex Sans',sans-serif;color:var(--muted)">Exportable verification report — print or save to PDF.</div>
+      <div style="margin-left:auto;font:600 12px 'IBM Plex Sans',sans-serif;color:var(--btntext);background:var(--btn);padding:7px 16px;border-radius:6px;cursor:pointer" onClick="{{ printReport }}">Print / Save PDF</div>
+    </div>
+    <div style="max-width:820px;margin:0 auto;padding:38px 46px 56px;color:var(--text)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--text);padding-bottom:12px">
+        <div style="font:600 24px 'IBM Plex Sans',sans-serif">Verification Report</div>
+        <div style="font:500 11px 'IBM Plex Mono',monospace;color:var(--muted)">{{ solverLabel }} · smtlib2 · 2026-07-27</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:26px;margin-top:12px;font:400 12px 'IBM Plex Sans',sans-serif;color:var(--muted)">
+        <div>Target&ensp;<span style="color:var(--text)">{{ fileLabel }}</span></div>
+        <div>VCs&ensp;<span style="color:var(--text)">7 generated</span></div>
+        <div>Result&ensp;<span style="color:{{ reportResultC }};font-weight:600">{{ reportResult }}</span></div>
+        <div>Rule set&ensp;<span style="color:var(--text)">{{ reportRuleSet }}</span></div>
+      </div>
+
+      <div style="font:600 14px 'IBM Plex Sans',sans-serif;margin:28px 0 10px">1 Proof obligations</div>
+      <div style="border-top:1.5px solid var(--text);border-bottom:1.5px solid var(--text)">
+        <div style="display:grid;grid-template-columns:1.4fr 2.4fr 1fr .8fr;padding:7px 2px;font:600 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted);letter-spacing:.05em;border-bottom:1px solid var(--border)"><div>FUNCTION</div><div>OBLIGATION</div><div>STATUS</div><div>TIME</div></div>
+        <sc-for list="{{ reportVCs }}" as="v" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:1.4fr 2.4fr 1fr .8fr;padding:8px 2px;font:400 12.5px 'IBM Plex Mono',monospace;border-bottom:1px solid var(--border2)"><div>{{ v.fn }}</div><div style="font-family:'IBM Plex Sans',sans-serif">{{ v.ob }}</div><div style="color:{{ v.c }};font-weight:600">{{ v.status }}</div><div style="color:var(--muted)">{{ v.time }}</div></div>
+        </sc-for>
+      </div>
+
+      <div style="font:600 14px 'IBM Plex Sans',sans-serif;margin:28px 0 10px">2 Findings &amp; counterexamples</div>
+      <sc-for list="{{ reportFindings }}" as="rf" hint-placeholder-count="2">
+        <div style="margin-bottom:20px">
+          <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px">
+            <span style="font:600 10px 'IBM Plex Mono',monospace;background:var(--red);color:#fff;padding:2px 7px;border-radius:3px">{{ rf.id }}</span>
+            <sc-for list="{{ rf.tags }}" as="tg"><span style="font:600 10px 'IBM Plex Mono',monospace;background:var(--amberbg);color:var(--amber);padding:2px 7px;border-radius:3px">{{ tg }}</span></sc-for>
+          </div>
+          <div style="font:600 13px 'IBM Plex Sans',sans-serif">{{ rf.title }}</div>
+          <div style="font:400 12px/1.6 'IBM Plex Sans',sans-serif;color:var(--muted);margin:5px 0 8px">{{ rf.note }}</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:5px;overflow:hidden;font:400 11.5px 'IBM Plex Mono',monospace">
+              <sc-for list="{{ rf.trace }}" as="row"><div style="display:grid;grid-template-columns:1fr 1.4fr 1.2fr;padding:5px 10px;border-bottom:1px solid var(--border2)"><div>{{ row.v }}</div><div style="color:{{ row.color }}">{{ row.dec }}</div><div style="color:var(--muted)">{{ row.hex }}</div></div></sc-for>
+            </div>
+            <div style="flex:1;min-width:220px;background:#232420;border-radius:5px;padding:10px 13px;font:400 11px/1.7 'IBM Plex Mono',monospace;color:#c6c9ba;white-space:pre-wrap">{{ rf.smt }}</div>
+          </div>
+        </div>
+      </sc-for>
+      <div style="margin-top:22px;padding-top:11px;border-top:1px solid var(--border);font:400 10.5px 'IBM Plex Sans',sans-serif;color:var(--muted)">Generated by verifier-agent v0.3 · {{ reportRuleSet }} · encoding QF_BV · counterexamples are concrete models witnessing each refuted obligation.</div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;defaultView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;workbench&quot;,&quot;misra&quot;,&quot;batch&quot;,&quot;input&quot;,&quot;report&quot;],&quot;default&quot;:&quot;workbench&quot;,&quot;tsType&quot;:&quot;'workbench' | 'misra' | 'batch' | 'input' | 'report'&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
+class Component extends DCLogic {
+  state = { view: null, theme: null, f: 0, tab: 'trace', phase: 'dirty', running: false, activeSub: null, inputPhase: 'idle', ruleSet: 'amd2', solver: 'z3', fileName: 'arith.c', code: DEFAULT_SRC, srcMode: 'source', activeFile: 'arith.c', aiState: 'idle', aiText: null, provider: 'anthropic', engine: 'cbmc', backend: null, verifyErr: null, realResult: null, repair: null };
+  componentDidMount() {
+    // Detect a hosted verification backend. Absent (standalone file) -> demo data.
+    if (!window.verifier) return;
+    window.verifier.engines()
+      .then((d) => this.setState({ backend: d, engine: d.default || 'cbmc' }))
+      .catch(() => this.setState({ backend: { engines: {} } }));
+  }
+  get theme() { return this.state.theme ?? this.props.defaultTheme ?? 'light'; }
+  get view() { return this.state.view ?? this.props.defaultView ?? 'workbench'; }
+  renderVals() {
+    const { f, tab, phase, running, activeSub, inputPhase, ruleSet, solver, fileName, code, srcMode, activeFile, aiState, aiText, engine, backend, verifyErr } = this.state;
+    const patched = phase === 'clean';
+    const busy = phase === 'running' || running;
+    const view = this.view;
+    const solverLabel = solver === 'cvc5' ? 'cvc5 1.2.0' : 'z3 4.13.0';
+    const inputBusy = inputPhase === 'running';
+    const mkOpt = (val, cur, label, set) => ({
+      label, click: () => this.setState(set),
+      c: val === cur ? 'var(--btntext)' : 'var(--text)',
+      bg: val === cur ? 'var(--btn)' : 'transparent',
+      bd: val === cur ? 'var(--btn)' : 'var(--border)',
+    });
+    const ruleOpts = [
+      mkOpt('c2012', ruleSet, 'MISRA C:2012', { ruleSet: 'c2012' }),
+      mkOpt('amd2', ruleSet, 'MISRA C:2012 + Amd 2', { ruleSet: 'amd2' }),
+      mkOpt('none', ruleSet, 'Safety VCs only', { ruleSet: 'none' }),
+    ];
+    const solverOpts = [
+      mkOpt('z3', solver, 'z3', { solver: 'z3' }),
+      mkOpt('cvc5', solver, 'cvc5', { solver: 'cvc5' }),
+    ];
+    // ---- verification engine (CBMC / ESBMC), interchangeable ----
+    const engineOpts = [
+      mkOpt('cbmc', engine, 'CBMC', { engine: 'cbmc' }),
+      mkOpt('esbmc', engine, 'ESBMC', { engine: 'esbmc' }),
+    ];
+    const engInfo = backend && backend.engines ? backend.engines[engine] : null;
+    const engineLabel = engine === 'esbmc' ? 'ESBMC' : 'CBMC';
+    let engineNote, engineNoteC;
+    if (!backend) {
+      engineNote = 'No backend detected — showing recorded demo results.';
+      engineNoteC = 'var(--amber)';
+    } else if (engInfo && engInfo.available) {
+      engineNote = engInfo.version || (engineLabel + ' ready');
+      engineNoteC = 'var(--green)';
+    } else {
+      engineNote = engineLabel + ' not installed on host — demo results.';
+      engineNoteC = 'var(--amber)';
+    }
+    const seg = (t, c) => ({ t, c: c || '#c6c9ba' });
+    const T = '#c7a563', K = '#9d86c8', N = '#d3b56a', P = '#c6c9ba';
+    const mkLine = (n, segs, opt) => Object.assign({ n: String(n), segs, bg: 'transparent', bar: 'transparent', cursor: 'default', mark: '', markC: 'transparent' }, opt);
+    const hl = (idx) => f === idx && !patched ? { bg: '#3a2a26', bar: '#c96f5f' } : {};
+    const lines = [
+      mkLine(11, []),
+      mkLine(12, [seg('int32_t', T), seg(' avg(', P), seg('int32_t', T), seg(' a, ', P), seg('int32_t', T), seg(' b) {', P)]),
+      patched
+        ? mkLine(13, [seg('    ', P), seg('return', K), seg(' a + (b - a) / ', P), seg('2', N), seg(';', P)], { mark: '  ✓ fixed', markC: '#7fae86' })
+        : mkLine(13, [seg('    ', P), seg('return', K), seg(' (a + b) / ', P), seg('2', N), seg(';', P)], Object.assign({ mark: '  ● F-01', markC: '#c96f5f', cursor: 'pointer', click: () => this.setState({ f: 0 }) }, hl(0))),
+      mkLine(14, [seg('}', P)]),
+      mkLine(15, []),
+      mkLine(16, [seg('static uint8_t', T), seg(' buf[', P), seg('16', N), seg('];', P)]),
+      mkLine(17, []),
+      mkLine(18, [seg('void', T), seg(' store(', P), seg('uint8_t', T), seg(' idx, ', P), seg('uint8_t', T), seg(' v)', P)]),
+      mkLine(19, [seg('{', P)]),
+      patched
+        ? mkLine(20, [seg('    ', P), seg('if', K), seg(' (idx < ', P), seg('16', N), seg(') {', P)], { mark: '  ✓ fixed', markC: '#7fae86' })
+        : mkLine(20, [seg('    ', P), seg('if', K), seg(' (idx <= ', P), seg('16', N), seg(') {', P)], Object.assign({ mark: '  ● F-02', markC: '#c96f5f', cursor: 'pointer', click: () => this.setState({ f: 1 }) }, hl(1))),
+      mkLine(21, [seg('        buf[idx] = v;', P)]),
+      mkLine(22, [seg('    }', P)]),
+      mkLine(23, [seg('}', P)]),
+    ];
+    const findings = [
+      { title: 'F-01 · avg(): signed integer overflow at line 13',
+        card: { id: 'F-01', title: 'Signed overflow in a + b', meta: 'avg · line 13 · sat 0.19 s · Dir 4.1 Required' },
+        trace: [
+          { v: 'a', dec: '2147483647', hex: '#x7fffffff', color: 'var(--text)' },
+          { v: 'b', dec: '1', hex: '#x00000001', color: 'var(--text)' },
+          { v: 'a + b', dec: '−2147483648', hex: '#x80000000', color: 'var(--red)' }],
+        traceNote: 'The solver returned sat for the negated safety condition: a + b exceeds INT32_MAX, undefined behaviour for signed arithmetic (C17 §6.5 ¶5).',
+        misra: [
+          { rule: 'Dir 4.1', sev: 'REQUIRED', sevColor: 'var(--red)', text: 'Run-time failures shall be minimised. Arithmetic on int32_t operands can overflow; range must be constrained or checked.' },
+          { rule: 'Rule 12.4', sev: 'ADVISORY', sevColor: 'var(--amber)', text: 'Evaluation of constant expressions should not lead to unsigned integer wrap-around.' }],
+        smt: '(set-logic QF_BV)\n(declare-const a (_ BitVec 32))\n(declare-const b (_ BitVec 32))\n(assert (not (bvsadd-no-overflow a b)))\n(check-sat)   ; sat\n(get-model)' },
+      { title: 'F-02 · store(): out-of-bounds write at line 20',
+        card: { id: 'F-02', title: 'Off-by-one: buf[16] write', meta: 'store · line 20 · sat 0.11 s · R.18.1 Required' },
+        trace: [
+          { v: 'idx', dec: '16', hex: '#x10', color: 'var(--red)' },
+          { v: 'v', dec: '255', hex: '#xff', color: 'var(--text)' },
+          { v: 'buf size', dec: '16 (0…15)', hex: '—', color: 'var(--text)' }],
+        traceNote: 'Guard idx <= 16 admits idx = 16, so buf[16] writes one element past the end of buf[16]. Change the guard to idx < 16.',
+        misra: [
+          { rule: 'Rule 18.1', sev: 'REQUIRED', sevColor: 'var(--red)', text: 'A pointer resulting from arithmetic on an array shall address an element of the same array. buf[16] is out of bounds.' },
+          { rule: 'Dir 4.1', sev: 'REQUIRED', sevColor: 'var(--red)', text: 'Run-time failures shall be minimised — bounds must be established before indexed writes.' }],
+        smt: '(set-logic QF_BV)\n(declare-const idx (_ BitVec 8))\n(assert (bvule idx #x10))      ; the guard\n(assert (bvuge idx #x10))      ; negated bounds\n(check-sat)   ; sat\n(get-model)   ; idx = #x10' },
+    ];
+    const cur = findings[f];
+    // ---- real backend results, when a hosted run produced them ----
+    const real = this.state.realResult;
+    const realCards = real ? real.findings.filter((x) => x.status === 'refuted').map((x, i) => ({
+      id: 'F-' + String(i + 1).padStart(2, '0'),
+      title: (x.function ? x.function + '(): ' : '') + (x.message || x.kind),
+      meta: [x.file && x.line ? x.file + ':' + x.line : '', x.kind,
+        x.model.length ? x.model.slice(0, 3).map((m) => m.name + '=' + m.value).join('  ') : '']
+        .filter(Boolean).join('  ·  '),
+      bg: 'transparent', border: 'var(--redborder)', click: undefined,
+    })) : null;
+    const realProvedList = real
+      ? (real.findings.filter((x) => x.status === 'proved').map((x) =>
+          '✓ ' + (x.function || x.file || 'vc') + '#' + x.kind).join('\n') || '—')
+      : null;
+    // ---- live source view + counterexample, driven by real findings ----
+    const realRefuted = real ? real.findings.filter((x) => x.status === 'refuted') : [];
+    const curReal = realRefuted.length
+      ? realRefuted[Math.min(f, realRefuted.length - 1)]
+      : null;
+    const realLineMap = {};
+    realRefuted.forEach((x, i) => { if (x.line && realLineMap[x.line] === undefined) realLineMap[x.line] = i; });
+    const selIdx = realRefuted.length ? Math.min(f, realRefuted.length - 1) : -1;
+    const realLines = real ? code.split('\n').map((t, i) => {
+      const n = i + 1;
+      const idx = realLineMap[n];
+      const marked = idx !== undefined;
+      return mkLine(n, [seg(t)], {
+        bg: marked && idx === selIdx ? '#3a2a26' : 'transparent',
+        bar: marked ? '#c96f5f' : 'transparent',
+        cursor: marked ? 'pointer' : 'default',
+        mark: marked ? '   ← ' + realRefuted[idx].kind : '',
+        markC: '#c96f5f',
+        click: marked ? () => this.setState({ f: idx, tab: 'trace' }) : undefined,
+      });
+    }) : null;
+    const realTraceRows = curReal
+      ? (curReal.model.length
+          ? curReal.model.map((m) => ({ v: m.name, dec: m.value, hex: '—', color: 'var(--text)' }))
+          : [{ v: '—', dec: 'no assignments in counterexample', hex: '—', color: 'var(--muted)' }])
+      : null;
+    const realTraceNote = curReal
+      ? curReal.message + ' — reported by ' + ((real && real.engineLabel) || engineLabel) +
+        (curReal.line ? ' at ' + (curReal.file || 'source') + ':' + curReal.line : '') +
+        '. Values above are the checker’s witness assignment.'
+      : null;
+    const findingCards = patched ? [] : findings.map((fd, i) => ({
+      id: fd.card.id, title: fd.card.title, meta: fd.card.meta,
+      bg: f === i ? 'var(--redbg)' : 'transparent',
+      border: f === i ? 'var(--redborder)' : 'var(--border)',
+      click: () => this.setState({ f: i }),
+    }));
+    const tabC = (t) => tab === t ? 'var(--text)' : 'var(--muted)';
+    const tabB = (t) => tab === t ? 'var(--chipbg)' : 'transparent';
+    const navC = (v) => view === v ? 'var(--text)' : 'var(--muted)';
+    const navB = (v) => view === v ? 'var(--chipbg)' : 'transparent';
+    const st = (ok, label) => ok
+      ? { status: label || 'COMPLIANT', stC: 'var(--green)', stBg: 'var(--greenbg)' }
+      : { status: label || 'VIOLATION', stC: 'var(--red)', stBg: 'var(--redbg)' };
+    const misraTable = [
+      Object.assign({ rule: 'Dir 4.1', cat: 'REQUIRED', catColor: 'var(--red)', text: 'Run-time failures shall be minimised', loc: patched ? '—' : 'L13, L20' }, st(patched, patched ? 'RESOLVED' : 'VIOLATION ×2')),
+      Object.assign({ rule: 'R.18.1', cat: 'REQUIRED', catColor: 'var(--red)', text: 'Pointer arithmetic shall address the same array', loc: patched ? '—' : 'L21' }, st(patched, patched ? 'RESOLVED' : undefined)),
+      Object.assign({ rule: 'R.12.4', cat: 'ADVISORY', catColor: 'var(--amber)', text: 'Constant expressions should not wrap around', loc: patched ? '—' : 'L13' }, st(patched, patched ? 'RESOLVED' : undefined)),
+      Object.assign({ rule: 'R.8.4', cat: 'REQUIRED', catColor: 'var(--red)', text: 'Compatible declaration visible at external definition', loc: '—' }, st(true)),
+      Object.assign({ rule: 'R.10.3', cat: 'REQUIRED', catColor: 'var(--red)', text: 'No assignment to a narrower essential type', loc: '—' }, st(true)),
+      Object.assign({ rule: 'R.17.7', cat: 'REQUIRED', catColor: 'var(--red)', text: 'Return values of non-void functions shall be used', loc: '—' }, st(true)),
+      Object.assign({ rule: 'R.21.3', cat: 'REQUIRED', catColor: 'var(--red)', text: 'Dynamic memory allocation shall not be used', loc: '—' }, st(true)),
+      Object.assign({ rule: 'R.15.5', cat: 'ADVISORY', catColor: 'var(--amber)', text: 'Single point of exit at the end of a function', loc: 'L13' }, { status: 'DEVIATION D-03', stC: 'var(--amber)', stBg: 'var(--amberbg)' }),
+      Object.assign({ rule: 'Dir 4.6', cat: 'ADVISORY', catColor: 'var(--amber)', text: 'Use typedefs indicating size and signedness', loc: '—' }, st(true)),
+    ];
+    const sc = (pct) => pct >= 90 ? { scC: 'var(--green)', scBg: 'var(--greenbg)' } : pct >= 70 ? { scC: 'var(--amber)', scBg: 'var(--amberbg)' } : { scC: 'var(--red)', scBg: 'var(--redbg)' };
+    const mkB = (id, student, vcs, refuted, misra, time, pct) => Object.assign({
+      id, student, vcs: String(vcs), refuted: refuted ? refuted + ' sat' : '0',
+      refC: refuted ? 'var(--red)' : 'var(--green)', misra: misra ? misra + ' viol.' : 'clean',
+      misC: misra ? 'var(--amber)' : 'var(--green)', time, score: pct + '%',
+      open: () => this.setState({ view: 'workbench', activeSub: { id, student }, f: 0, tab: 'trace', phase: 'dirty' }),
+    }, sc(pct));
+    const batchRows = [
+      mkB('sub-3-011', 'k. chen', 7, 0, 0, '0.8 s', 100),
+      mkB('sub-3-014', 'm. okafor', 7, 0, 1, '0.9 s', 94),
+      mkB('sub-3-007', 'j. alvarez', 7, 1, 1, '1.1 s', 81),
+      mkB('sub-3-021', 's. park', 7, 1, 2, '0.7 s', 76),
+      mkB('sub-3-003', 'r. gupta', 7, 2, 3, '1.4 s', 58),
+      mkB('sub-3-019', 't. nguyen', 7, 0, 0, '0.6 s', 100),
+      mkB('sub-3-008', 'a. haddad', 7, 1, 1, '2.3 s', 79),
+      mkB('sub-3-016', 'l. brooks', 7, 3, 4, '1.9 s', 41),
+      mkB('sub-3-002', 'd. kim', 7, 0, 2, '0.8 s', 88),
+      mkB('sub-3-025', 'e. rossi', 7, 2, 1, '5.0 s', 63),
+    ];
+    const ruleSetLabel = ruleSet === 'c2012' ? 'MISRA C:2012' : ruleSet === 'none' ? 'Safety VCs only' : 'MISRA C:2012 + Amendment 2';
+    const cannedSuggestion = 'Rewrite the mean as a + (b − a) / 2 so the intermediate sum cannot overflow, and tighten the bound to idx < 16 so buf[16] is never written. Then re-verify.';
+    const suggestionText = aiText || cannedSuggestion;
+    const provider = this.state.provider;
+    const providerOptions = [
+      { value: 'anthropic', label: 'Claude' },
+      { value: 'gemini', label: 'Gemini' },
+      { value: 'openai', label: 'ChatGPT' },
+      { value: 'custom', label: 'Self-hosted' },
+    ];
+    const providerLabel = (providerOptions.find((p) => p.value === provider) || {}).label || provider;
+    const setProvider = (e) => this.setState({ provider: e.target.value, aiState: 'idle', aiText: null });
+    const aiMeta = { idle: ['canned', 'var(--muted)', 'var(--chipbg)'], loading: ['live · thinking…', 'var(--accent)', 'var(--chipbg)'], done: ['live · ' + providerLabel.toLowerCase(), 'var(--green)', 'var(--greenbg)'], offline: ['offline · canned', 'var(--amber)', 'var(--amberbg)'] }[aiState];
+    const backendReady = !!(typeof window !== 'undefined' && window.verifier && engInfo && engInfo.available);
+    const askAgent = async () => {
+      if (aiState === 'loading') return;
+      this.setState({ aiState: 'loading' });
+      // Hosted + engine present: run the real verified repair loop.
+      if (backendReady) {
+        try {
+          const r = await window.verifier.repair({ engine, code, fileName, provider: this.state.provider });
+          const fallbackMsg = {
+            'already-proved': 'Nothing to repair — every obligation already discharged.',
+            unrepaired: 'No patch verified. The remaining counterexamples are listed above.',
+            error: r.error || 'Repair failed.',
+          }[r.status] || '';
+          const last = (r.iterations || []).filter((it) => it.counts).pop();
+          this.setState({
+            repair: r,
+            aiText: r.rationale || fallbackMsg,
+            aiState: r.status === 'error' ? 'offline' : 'done',
+            code: (r.status === 'repaired' && r.finalCode) ? r.finalCode : code,
+            phase: r.status === 'repaired' ? 'clean' : 'dirty',
+            srcMode: (r.diff && r.diff.length) ? 'diff' : 'source',
+            f: 0,
+            // reflect the post-loop verification state in the workbench
+            realResult: last ? {
+              engine, engineLabel: r.engineLabel || engineLabel, engineVersion: r.engineVersion,
+              available: true, status: last.status, counts: last.counts,
+              findings: last.findings || [], durationMs: last.durationMs,
+            } : this.state.realResult,
+          });
+        } catch (e) {
+          this.setState({ aiText: 'Repair failed: ' + (e && e.message || e), aiState: 'offline' });
+        }
+        return;
+      }
+      try {
+        const prompt = 'You are a C verification agent. Z3 refuted two obligations in this code:\n\n' + code + '\n\nCounterexamples: avg(2147483647, 1) overflows signed int32 (a+b wraps to INT32_MIN); store(idx=16, ...) writes buf[16] which is out of bounds for uint8_t buf[16]. In 2–3 sentences, give the concrete source-level fix for both. Be terse and specific.';
+        const text = await window.claude.complete({ messages: [{ role: 'user', content: prompt }], max_tokens: 300, provider: this.state.provider });
+        this.setState({ aiText: (text || '').trim() || cannedSuggestion, aiState: text ? 'done' : 'offline' });
+      } catch (e) { this.setState({ aiText: cannedSuggestion, aiState: 'offline' }); }
+    };
+    const treeFiles = ['arith.c', 'crc.c', 'util.h'].map((n) => ({
+      name: n, icon: n.endsWith('.h') ? '◦' : '◉',
+      c: activeFile === n ? 'var(--text)' : 'var(--muted)',
+      bg: activeFile === n ? 'var(--chipbg)' : 'transparent',
+      click: () => this.setState({ activeFile: n }),
+    }));
+    const fnDef = [
+      { name: 'avg', idx: 0 }, { name: 'store', idx: 1 },
+      { name: 'clamp', idx: null }, { name: 'crc8', idx: null },
+    ];
+    const treeFns = fnDef.map((fn) => {
+      const bad = fn.idx !== null && !patched;
+      return {
+        name: fn.name,
+        mark: bad ? '●' : '✓', markC: bad ? 'var(--red)' : 'var(--green)',
+        c: (fn.idx === f && !patched) ? 'var(--text)' : 'var(--muted)',
+        bg: (fn.idx === f && !patched && fn.idx !== null) ? 'var(--chipbg)' : 'transparent',
+        cursor: fn.idx !== null ? 'pointer' : 'default',
+        click: fn.idx !== null ? () => this.setState({ f: fn.idx, srcMode: 'source', tab: 'trace' }) : undefined,
+      };
+    });
+    const dH = (t) => ({ t, c: '#767a6b', bg: 'transparent' });
+    const dM = (t) => ({ t, c: '#c96f5f', bg: '#3a2a26' });
+    const dP = (t) => ({ t, c: '#7fae86', bg: '#243026' });
+    const diffLines = [
+      dH('@@ avg()  — line 13'),
+      dM('-    return (a + b) / 2;'),
+      dP('+    return a + (b - a) / 2;'),
+      dH(''),
+      dH('@@ store()  — line 20'),
+      dM('-    if (idx <= 16) {'),
+      dP('+    if (idx < 16) {'),
+    ];
+    // Real diff from the repair loop, when a hosted run produced one.
+    const rep = this.state.repair;
+    const realDiffLines = rep && rep.diff && rep.diff.length
+      ? rep.diff.map((d) => d.type === '+' ? dP('+' + d.text)
+          : d.type === '-' ? dM('-' + d.text)
+          : d.type === '@' ? dH('@@')
+          : dH(' ' + d.text))
+      : null;
+    // Iteration audit trail: every candidate patch was re-checked.
+    const repairLog = rep && rep.iterations ? rep.iterations.map((it) => {
+      const secs = it.durationMs != null ? ' · ' + (it.durationMs / 1000).toFixed(1) + ' s' : '';
+      if (it.error) return { t: 'iter ' + it.iter + ' · ' + it.error, c: 'var(--amber)' };
+      const ref = it.counts ? it.counts.refuted : 0;
+      const label = it.kind === 'verify' ? 'verify' : 'repair → re-verify';
+      const outcome = ref === 0
+        ? 'all ' + (it.counts ? it.counts.proved : 0) + ' proved ✓'
+        : ref + ' refuted';
+      return {
+        t: 'iter ' + it.iter + ' · ' + label + ' · ' + outcome + secs,
+        c: ref === 0 ? 'var(--green)' : 'var(--red)'
+      };
+    }) : [];
+    const repairVerdictMap = {
+      repaired: ['Verified — patch held (re-checked by ' + ((rep && rep.engineLabel) || engineLabel) + ').', 'var(--green)'],
+      'already-proved': ['Already verified — nothing to repair.', 'var(--green)'],
+      unrepaired: ['Could not repair — ' + ((rep && rep.remaining) || 0) + ' obligation(s) still refuted after ' + ((rep && rep.iterations ? rep.iterations.length - 1 : 0)) + ' attempt(s).', 'var(--red)'],
+      error: [(rep && rep.error) || 'Repair failed.', 'var(--amber)'],
+    };
+    const repairVerdictPair = rep ? (repairVerdictMap[rep.status] || ['', 'var(--muted)']) : ['', 'var(--muted)'];
+    const reportVCs = [
+      { fn: 'avg', ob: 'signed overflow in a + b', status: patched ? '✓ unsat' : '✗ sat', c: patched ? 'var(--green)' : 'var(--red)', time: '0.19 s' },
+      { fn: 'store', ob: 'index within bounds of buf[16]', status: patched ? '✓ unsat' : '✗ sat', c: patched ? 'var(--green)' : 'var(--red)', time: '0.11 s' },
+      { fn: 'clamp', ob: 'postcondition lo ≤ r ≤ hi', status: '✓ unsat', c: 'var(--green)', time: '0.07 s' },
+      { fn: 'crc8', ob: 'loop termination, no wraparound', status: '✓ unsat', c: 'var(--green)', time: '0.32 s' },
+    ];
+    const reportFindings = patched ? [] : [
+      { id: 'F-01', tags: ['Dir 4.1 Required', 'Rule 12.4 Advisory'], title: 'avg(): signed integer overflow at line 13',
+        note: 'Solver returned sat for the negated safety condition; a + b exceeds INT32_MAX — undefined behaviour (C17 §6.5 ¶5).',
+        trace: findings[0].trace, smt: findings[0].smt },
+      { id: 'F-02', tags: ['Rule 18.1 Required', 'Dir 4.1 Required'], title: 'store(): out-of-bounds write at line 20',
+        note: 'Guard idx <= 16 admits idx = 16, writing one element past buf[16].',
+        trace: findings[1].trace, smt: findings[1].smt },
+    ];
+    return {
+      themeClass: this.theme === 'dark' ? 'dark' : '',
+      themeIcon: this.theme === 'dark' ? '☀' : '☾',
+      toggleTheme: () => this.setState({ theme: this.theme === 'dark' ? 'light' : 'dark' }),
+      goWork: () => this.setState({ view: 'workbench' }),
+      goInput: () => this.setState({ view: 'input', inputPhase: 'idle' }),
+      navInputC: navC('input'), navInputBg: navB('input'),
+      fileLabel: activeSub ? activeSub.id : fileName,
+      showInput: view === 'input' ? 'block' : 'none',
+      code, fileName, srcMeta: code.split('\n').length + ' lines · C',
+      onCode: (e) => this.setState({ code: e.target.value }),
+      onFileName: (e) => this.setState({ fileName: e.target.value }),
+      loadSample: () => this.setState({ code: DEFAULT_SRC, fileName: 'arith.c' }),
+      ruleOpts, solverOpts, solverLabel, engineOpts, engineLabel, engineNote, engineNoteC,
+      verifyErr: verifyErr || '', showVerifyErr: verifyErr ? 'block' : 'none',
+      runBtnLabel: inputBusy ? 'Verifying…' : 'Verify →',
+      showInputProg: inputBusy ? 'block' : 'none',
+      runVerify: async () => {
+        if (inputBusy) return;
+        this.setState({ inputPhase: 'running', verifyErr: null });
+        const toWorkbench = (extra) => this.setState(Object.assign(
+          { view: 'workbench', inputPhase: 'idle', activeSub: null, f: 0, tab: 'trace', phase: 'dirty' },
+          extra || {}));
+        // No hosted backend: keep the recorded demo run.
+        if (!window.verifier) { setTimeout(() => toWorkbench(), 1100); return; }
+        try {
+          const r = await window.verifier.verify({ engine, code, fileName });
+          if (!r.available) {
+            toWorkbench({ verifyErr: (r.error || 'engine unavailable') + (r.hint ? ' — ' + r.hint : '') + '\nShowing demo results.' });
+          } else if (r.status === 'error' || r.status === 'timeout') {
+            this.setState({ inputPhase: 'idle', verifyErr: engineLabel + ': ' + (r.error || 'failed') });
+          } else {
+            toWorkbench({ realResult: r });
+          }
+        } catch (e) {
+          toWorkbench({ verifyErr: String(e && e.message || e) + '\nShowing demo results.' });
+        }
+      },
+      showSubCrumb: activeSub ? 'flex' : 'none',
+      subCrumb: activeSub ? activeSub.id + ' · ' + activeSub.student : '',
+      backToBatch: () => this.setState({ view: 'batch', activeSub: null }),
+      goMisra: () => this.setState({ view: 'misra' }),
+      goBatch: () => this.setState({ view: 'batch' }),
+      goReport: () => this.setState({ view: 'report' }),
+      navReportC: navC('report'), navReportBg: navB('report'),
+      showReportView: view === 'report' ? 'block' : 'none',
+      printReport: () => window.print(),
+      treeFiles, treeFns, diffLines: realDiffLines || diffLines, ruleSetLabel,
+      srcModeSource: () => this.setState({ srcMode: 'source' }),
+      srcModeDiff: () => this.setState({ srcMode: 'diff' }),
+      showSource: srcMode === 'source' ? 'block' : 'none',
+      showDiff: srcMode === 'diff' ? 'block' : 'none',
+      srcTabC: srcMode === 'source' ? '#d9dccf' : '#767a6b',
+      srcTabBg: srcMode === 'source' ? '#3a3b36' : 'transparent',
+      diffTabC: srcMode === 'diff' ? '#d9dccf' : '#767a6b',
+      diffTabBg: srcMode === 'diff' ? '#3a3b36' : 'transparent',
+      suggestionText, askAgent,
+      aiBadge: aiMeta[0], aiBadgeC: aiMeta[1], aiBadgeBg: aiMeta[2],
+      provider, providerOptions, setProvider,
+      showAskBtn: (phase === 'dirty' && aiState !== 'loading') ? 'inline' : 'none',
+      askLabel: backendReady ? 'Repair & verify' : 'Ask agent',
+      reportResult: patched ? '7 proved · 0 refuted' : '2 refuted · 5 proved',
+      reportResultC: patched ? 'var(--green)' : 'var(--red)',
+      reportRuleSet: ruleSetLabel, reportVCs, reportFindings,
+      navWorkC: navC('workbench'), navWorkBg: navB('workbench'),
+      navMisraC: navC('misra'), navMisraBg: navB('misra'),
+      navBatchC: navC('batch'), navBatchBg: navB('batch'),
+      showWork: view === 'workbench' ? 'block' : 'none',
+      showMisraView: view === 'misra' ? 'block' : 'none',
+      showBatchView: view === 'batch' ? 'block' : 'none',
+      runChip: busy ? 'run #143 · z3 4.13.0 · running…' : patched ? 'run #143 · z3 4.13.0 · 0.74 s' : 'run #142 · z3 4.13.0 · 0.81 s',
+      refutedChip: busy ? '… refuted' : (patched ? '0 refuted' : '2 refuted'),
+      provedChip: busy ? '… proved' : (patched ? '7 proved' : '5 proved'),
+      verifyLabel: busy ? 'Verifying…' : 'Re-verify',
+      reverify: () => { if (busy) return; this.setState({ running: true }); setTimeout(() => this.setState({ running: false }), 900); },
+      patchedTag: patched ? '· patched' : '',
+      srcHeaderName: real ? fileName : 'arith.c',
+      codeLines: realLines || lines,
+      findingsHeading: real
+        ? 'FINDINGS (' + real.counts.refuted + ') · ' + (real.engineLabel || engineLabel)
+        : patched ? 'FINDINGS (0)' : busy ? 'FINDINGS — verifying…' : 'FINDINGS (2)',
+      findingCards: realCards || findingCards,
+      showLiveRun: real ? 'block' : 'none',
+      liveRunLine: real
+        ? (real.engineVersion || real.engineLabel || engineLabel) + '\n' +
+          real.counts.refuted + ' refuted · ' + real.counts.proved + ' proved · ' +
+          (real.durationMs != null ? (real.durationMs / 1000).toFixed(1) + ' s' : '')
+        : '',
+      showNoFindings: (real ? real.counts.refuted === 0 : patched) ? 'block' : 'none',
+      noFindingsText: 'No findings — all ' + (real ? real.findings.length : 7) + ' obligations discharged',
+      provedHeading: real ? 'PROVED (' + real.counts.proved + ')' : patched ? 'PROVED (7)' : 'PROVED (5)',
+      provedList: real ? realProvedList : patched
+        ? '✓ avg#overflow\n✓ store#bounds\n✓ store#init\n✓ clamp#post\n✓ clamp#unreach\n✓ crc8#term\n✓ crc8#wrap'
+        : '✓ store#init\n✓ clamp#post\n✓ clamp#unreach\n✓ crc8#term\n✓ crc8#wrap',
+      showSuggestion: phase === 'dirty' ? 'block' : 'none',
+      showApplyBtn: rep ? 'none' : 'inline-block',
+      showRunning: phase === 'running' ? 'block' : 'none',
+      runningLog: rep ? '▸ re-verifying with ' + engineLabel + '…' : '▸ patch applied\n▸ regenerating 7 VCs…\n▸ z3 running…',
+      showRepairLog: rep ? 'block' : 'none',
+      repairLog,
+      repairVerdict: repairVerdictPair[0],
+      repairVerdictC: repairVerdictPair[1],
+      showRevert: rep && rep.status === 'repaired' ? 'inline' : 'none',
+      showPatched: (patched && !rep) ? 'block' : 'none',
+      applyPatch: () => { this.setState({ phase: 'running' }); setTimeout(() => this.setState({ phase: 'clean' }), 1300); },
+      revertPatch: () => this.setState({ phase: 'dirty', f: 0, tab: 'trace', repair: null, srcMode: 'source', aiState: 'idle', aiText: null }),
+      tabTrace: () => this.setState({ tab: 'trace' }),
+      tabMisra: () => this.setState({ tab: 'misra' }),
+      tabSmt: () => this.setState({ tab: 'smt' }),
+      tabTraceColor: tabC('trace'), tabTraceBg: tabB('trace'),
+      tabMisraColor: tabC('misra'), tabMisraBg: tabB('misra'),
+      tabSmtColor: tabC('smt'), tabSmtBg: tabB('smt'),
+      showClean: patched ? 'block' : 'none',
+      showDetail: patched ? 'none' : 'block',
+      showTrace: tab === 'trace' ? 'block' : 'none',
+      showMisra: tab === 'misra' ? 'block' : 'none',
+      showSmt: tab === 'smt' ? 'block' : 'none',
+      findingTitle: curReal
+        ? (curReal.function ? curReal.function + '(): ' : '') + (curReal.message || curReal.kind)
+        : cur.title,
+      traceRows: realTraceRows || cur.trace,
+      traceNote: realTraceNote || cur.traceNote,
+      misraRows: cur.misra,
+      smtText: real
+        ? (real.raw ? String(real.raw).slice(0, 4000) : 'Raw ' + (real.engineLabel || engineLabel) + ' output unavailable for this run.')
+        : cur.smt,
+      misraSummary: patched ? '9 rules checked · 0 violations · 1 deviation · run #143' : '9 rules checked · 3 violations (2 Required, 1 Advisory) · 1 deviation · run #142',
+      misraTable, batchRows,
+    };
+  }
+}
+
+const DEFAULT_SRC = `#include <stdint.h>
+
+/* Return the mean of two signed 32-bit integers. */
+int32_t avg(int32_t a, int32_t b) {
+    return (a + b) / 2;
+}
+
+static uint8_t buf[16];
+
+void store(uint8_t idx, uint8_t v)
+{
+    if (idx <= 16) {
+        buf[idx] = v;
+    }
+}
+
+int32_t clamp(int32_t x, int32_t lo, int32_t hi) {
+    if (x < lo) return lo;
+    if (x > hi) return hi;
+    return x;
+}`;
+</script>
+</body>
+</html>
