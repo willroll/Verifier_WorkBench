@@ -24,6 +24,8 @@ COPY packages/web/package.json packages/web/
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY packages ./packages
+# The web build inlines the shipped cFS example sources (examples/cfs/*.c).
+COPY examples ./examples
 RUN npm run build
 
 # ---- runtime ----------------------------------------------------------------

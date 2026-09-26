@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // Allow reading the shipped examples/ files (imported with ?raw) from the repo root.
+    fs: { allow: ['..', '../..'] },
     proxy: { '/api': { target: process.env.API_URL ?? 'http://127.0.0.1:3000', changeOrigin: true } },
   },
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: true },

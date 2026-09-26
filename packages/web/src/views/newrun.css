@@ -45,6 +45,21 @@
   font: 500 11px var(--sans);
   color: var(--accent);
 }
+.nr-sample {
+  margin-left: auto;
+  font: 500 11px var(--sans);
+  color: var(--accent);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 8px;
+  max-width: 60%;
+}
+.nr-sample-note {
+  font: 400 11px/1.5 var(--sans);
+  color: var(--text);
+  margin: 6px 0 0;
+}
 .nr-code {
   display: block;
   width: 100%;

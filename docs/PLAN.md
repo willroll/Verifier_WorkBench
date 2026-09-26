@@ -219,6 +219,7 @@ every phase has a working end-to-end demo.
 - Add auth, at minimum a shared token, before any public deployment.
 
 ### Phase 5: Expansion (to prioritize together)
+- **Real-code examples (started).** `examples/cfs` holds self-contained verification harnesses over real NASA cFS flight code (Apache-2.0): a `CFE_TIME_Add` proof and a `CFE_TIME_Compare` counterexample that surfaces the deliberate ~68-year rollover. They are offered from the New Run **Samples** menu (each sample carries its own engine/solver/checks, since the `CFE_TIME_Add` proof needs overflow checks off — cFS time wraps unsigned by contract), and pinned by a CBMC regression test in CI. This is the seed of the eval corpus below; next is a broader set (more `CFE_TIME` properties, a bounds-safety example) and turning verdicts into a scored corpus.
 - **Eval corpus.** Inject defects (off-by-one, overflow, null dereference, division by zero) into clean C. Measure catch rate per engine, and repair rate, iterations, cost, and cheat-rejection rate per provider.
 - **CI.** A GitHub Action and a pre-commit hook, with an optional PR carrying a verified repair.
 - **MISRA.** The cppcheck MISRA addon with user-supplied rule text, mapping `Finding.kind` to rule IDs.
