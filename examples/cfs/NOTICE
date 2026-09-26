@@ -1,15 +1,21 @@
-The C files in this directory contain functions and type definitions copied
-verbatim from NASA's Core Flight System (cFS), specifically the Core Flight
-Executive (cFE):
+The C files in this directory contain functions, type definitions, and
+configuration values taken from NASA's Core Flight System (cFS):
 
-    https://github.com/nasa/cFE
+    https://github.com/nasa/cFE  (Core Flight Executive)
     modules/time/fsw/src/cfe_time_api.c
     modules/core_api/fsw/inc/cfe_time_api_typedefs.h
     modules/time/fsw/src/cfe_time_utils.h
 
-The copied portions are delimited in each file between the markers
-"verbatim from cFE" and "end cFE". Everything outside those markers (the
-verification harnesses) is original to this project.
+    https://github.com/nasa/LC   (Limit Checker application)
+    config/default_lc_tblstruct.h        (LC_WRTEntry_t results-table entry)
+    fsw/inc/lc_interface_cfg.h           (LC_MAX_WATCHPOINTS default, 176)
+    fsw/src/lc_watch.c                   (the LC_OperData.WRTPtr[WatchIndex] write pattern)
+
+Copied functions are delimited in each file between "verbatim from …" and
+"end …" markers. lc_watch_result_bounds.c uses LC's results-table entry type
+and table size, with accessor functions written for this project that model
+LC's guarded, indexed table writes. Everything outside the copied portions
+(the verification harnesses) is original to this project.
 
 NASA Docket No. GSC-19,200-1, identified as "cFS Draco".
 Copyright (c) 2023 United States Government as represented by the
