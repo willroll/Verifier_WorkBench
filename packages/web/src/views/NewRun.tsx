@@ -6,7 +6,7 @@ import { OptionGroup, type Option } from '../components/OptionGroup';
 import { DEMO_RUN_ID } from '../demo';
 import { updateDraft, useDraft } from '../draft';
 import { navigate } from '../router';
-import { SAMPLE_CODE, SAMPLE_FILE } from '../sample';
+import { DEFAULT_SAMPLE, SAMPLES, getSample, type Sample } from '../samples';
 import './newrun.css';
 
 type RuleSet = 'c2012' | 'amd2' | 'safety';
@@ -62,13 +62,26 @@ export function NewRun() {
   const sat = solver === 'minisat';
   const canVerify = draft.code.trim() !== '' && (backend.state === 'offline' || !!info?.available);
 
+  const loadSample = (sample: Sample) => {
+    setError(null);
+    updateDraft({
+      code: sample.code,
+      fileName: sample.fileName,
+      sampleId: sample.id,
+      checks: sample.checks ?? null,
+      ...(sample.engine ? { engine: sample.engine, solver: null } : {}),
+      ...(sample.solver ? { solver: sample.solver } : {}),
+    });
+  };
+  const activeSample = getSample(draft.sampleId);
+
   const verify = async () => {
     setError(null);
     if (backend.state === 'offline') {
-      if (draft.code.trim() === SAMPLE_CODE.trim()) navigate(`/runs/${DEMO_RUN_ID}`);
+      if (draft.code.trim() === DEFAULT_SAMPLE.code.trim()) navigate(`/runs/${DEMO_RUN_ID}`);
       else
         setError(
-          'No server is reachable, so nothing can be verified here. The demo replays a recorded run of the sample (Load sample).',
+          'No server is reachable, so nothing can be verified here. The demo replays a recorded run of the arith.c sample (load it from Samples).',
         );
       return;
     }
@@ -78,6 +91,7 @@ export function NewRun() {
       engine,
       ...(solver ? { solver } : {}),
       unwind,
+      ...(draft.checks ? { checks: draft.checks } : {}),
     });
     if (!outcome.ok) setError(outcome.error);
   };
@@ -119,13 +133,25 @@ export function NewRun() {
               onChange={(e) => updateDraft({ fileName: e.target.value })}
             />
             <div className="nr-meta">{lines} lines · C</div>
-            <button
-              type="button"
-              className="btn-reset nr-link"
-              onClick={() => updateDraft({ code: SAMPLE_CODE, fileName: SAMPLE_FILE })}
+            <label className="visually-hidden" htmlFor="nr-sample">
+              Load a sample
+            </label>
+            <select
+              id="nr-sample"
+              className="nr-sample"
+              value={activeSample && draft.code === activeSample.code ? activeSample.id : ''}
+              onChange={(e) => {
+                const s = getSample(e.target.value);
+                if (s) loadSample(s);
+              }}
             >
-              Load sample
-            </button>
+              <option value="">Load a sample…</option>
+              {SAMPLES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
           </div>
           <label className="visually-hidden" htmlFor="nr-code">
             C source
@@ -137,6 +163,14 @@ export function NewRun() {
             spellCheck={false}
             onChange={(e) => updateDraft({ code: e.target.value })}
           />
+          {activeSample?.note && draft.code === activeSample.code ? (
+            <div className="nr-sample-note">{activeSample.note}</div>
+          ) : null}
+          {draft.checks ? (
+            <div className="nr-sample-note tone-muted">
+              Checking only: {draft.checks.join(' · ')}. Other checks are off for this run.
+            </div>
+          ) : null}
           <div
             className={`nr-drop${dragOver ? ' nr-drop-over' : ''}`}
             onDragOver={(e) => {

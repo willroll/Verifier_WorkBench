@@ -42,7 +42,7 @@ try {
 
   await step('New Run verifies the sample with the real checker', async () => {
     await page.goto(`${BASE}/new`);
-    await page.getByRole('button', { name: 'Load sample' }).click();
+    await page.locator('#nr-sample').selectOption('arith');
     await page.locator('.nr-note.tone-green').waitFor();
     await page.getByRole('button', { name: /^Verify/ }).click();
     await page.waitForURL(/\/runs\/1$/, { timeout: 120_000 });
@@ -93,6 +93,17 @@ try {
     await page.waitForURL(/\/runs\/1$/);
     assert.match(await text(page.locator('.src-lines')), /if \(idx <= 16\)/);
     assert.equal(await page.locator('.fp-card').count(), 2);
+  });
+
+  await step('A cFS example verifies real flight code from the samples menu', async () => {
+    await page.goto(`${BASE}/new`);
+    await page.locator('#nr-sample').selectOption('cfe-time-compare');
+    assert.match(await text(page.locator('.nr-sample-note')), /NASA cFS/);
+    await page.getByRole('button', { name: /^Verify/ }).click();
+    await page.waitForURL(/\/runs\/\d+$/, { timeout: 120_000 });
+    const banner = await text(page.locator('.fp-banner'));
+    assert.match(banner, /1 refuted · 2 proved/);
+    assert.match(await text(page.locator('.wb-detail-title')), /assume_gt_means_larger_seconds/);
   });
   await context.close();
 

@@ -158,6 +158,26 @@ Content-Security-Policy (scripts, styles and fonts from the same origin only).
   reports nothing but colour contrast, where a few of the design's tokens are
   below WCAG AA (see `docs/PLAN.md`, Phase 3).
 
+## Examples
+
+New Run's **Samples** menu offers the built-in `arith.c` and self-contained
+harnesses over real flight code from NASA's
+[Core Flight System](https://github.com/nasa/cFE) (cFS, Apache-2.0), in
+[`examples/cfs`](examples/cfs):
+
+- **`cfe_time_add.c`** proves that `CFE_TIME_Add`'s hand-written carry equals a
+  single 64-bit addition, for every pair of times.
+- **`cfe_time_compare.c`** refutes a natural-looking spec about `CFE_TIME_Compare`
+  with a concrete witness that exposes its deliberate ~68-year clock rollover,
+  while proving the function's two internal subtractions safe.
+
+Each sample carries the engine settings and check set that make its point. The
+`CFE_TIME_Add` proof runs with overflow checks **off**, because cFS time wraps
+unsigned by contract — the menu says so when it loads, so a proof or
+counterexample is never misread. See [`examples/cfs/README.md`](examples/cfs/README.md)
+for how to run them from the CLI checker, and [`examples/cfs/NOTICE`](examples/cfs/NOTICE)
+for attribution.
+
 ## API
 
 Types: [`packages/shared/src/index.ts`](packages/shared/src/index.ts).
@@ -243,6 +263,7 @@ packages/core     verification core: engine adapters, harnesses, runner, SMT-LIB
 packages/llm      model providers: Claude (official SDK), OpenAI-compatible, Gemini
 packages/server   Fastify API; serves the web app, and the prototype at /prototype
 packages/web      React web app: New Run, Workbench, Report, MISRA, Problem Sets
+examples/cfs      verification harnesses over real NASA cFS code (Apache-2.0)
 design/           Claude Design prototype (reference)
 hosted-example/   the handoff's original backend (reference; superseded by packages/)
 docs/             plan and the design handoff spec
@@ -267,6 +288,10 @@ npm run e2e               # the web app in a real browser, against a running ser
     obligations;
   - rerun every recorded behavior proof and repair live, and require the same
     verdicts.
+- **cFS examples** in `packages/core/test/cfs-examples.test.ts` run real CBMC on
+  the shipped [`examples/cfs`](examples/cfs) harnesses and pin their verdicts:
+  the `CFE_TIME_Add` proof holds, and the `CFE_TIME_Compare` spec is refuted with
+  the rollover witness. Skipped when CBMC is absent, required in CI.
 - **Model providers** are tested against a fake SDK client and a fake `fetch`.
   `packages/server/test/fake-model.mjs` stands in for a self-hosted model. CI
   uses it to run a repair inside the Docker image.

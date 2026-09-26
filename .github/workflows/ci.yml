@@ -52,7 +52,7 @@ jobs:
           esbmc --version
       - run: npm ci
       - name: Integration tests (missing tools fail instead of skipping)
-        run: npx vitest run packages/core/test/integration.test.ts
+        run: npx vitest run packages/core/test/integration.test.ts packages/core/test/cfs-examples.test.ts
         env:
           VERIFIER_REQUIRE: cbmc,esbmc,z3,cbmc:z3,cbmc:cvc5,goto-tools
 
