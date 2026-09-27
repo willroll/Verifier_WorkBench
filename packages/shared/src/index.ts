@@ -31,7 +31,16 @@ export const DEFAULT_CHECKS: readonly CheckId[] = CHECK_IDS;
 export type ObligationStatus = 'proved' | 'refuted' | 'inconclusive';
 
 export type ObligationKind =
-  'overflow' | 'bounds' | 'div-by-zero' | 'pointer' | 'conversion' | 'shift' | 'unwind' | 'assertion';
+  | 'overflow'
+  | 'bounds'
+  | 'div-by-zero'
+  | 'pointer'
+  | 'conversion'
+  | 'shift'
+  | 'unwind'
+  | 'assertion'
+  /** A caller may pass a callee arguments its VW_REQUIRE precondition rejects. */
+  | 'contract';
 
 export type InconclusiveReason = 'unwind-bound' | 'not-checked' | 'unknown' | 'timeout' | 'error';
 

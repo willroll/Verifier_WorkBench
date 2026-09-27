@@ -19,6 +19,7 @@ reports `a` and `b`.
 | [`cfe_time_compare_order.c`](cfe_time_compare_order.c) | `CFE_TIME_Compare` is antisymmetric: A after B iff B before A | **Proved** for all inputs, rollover included | Default checks; the guarded subtractions are proved too. |
 | [`lc_watch_result_bounds.c`](lc_watch_result_bounds.c) | An indexed write to LC's watchpoint results table stays in bounds | **Proved** under LC's guard; the off-by-one variant is **refuted** at index `LC_MAX_WATCHPOINTS` | Default checks; uses LC's real results-table entry type and table size (176). The array-bounds check does the work. |
 | [`lc_watch_result_contract.c`](lc_watch_result_contract.c) | The same table write, but in a leaf with **no** internal guard — proved in bounds under the precondition `VW_REQUIRE(WatchIndex < LC_MAX_WATCHPOINTS)` | **Proved** under the contract; **refuted** without it, at an index past the end | Default checks. The precondition is the contract LC's callers enforce; it is surfaced with the result so the proof reads as conditional. |
+| [`lc_watch_caller.c`](lc_watch_caller.c) | Callers of that leaf must satisfy its precondition | Guarding caller **proved** to honor it; off-by-one caller (`<=`) **refuted** at the caller index `LC_MAX_WATCHPOINTS` | Default checks. The callee's `VW_REQUIRE` becomes an obligation on each caller — assume/guarantee reasoning, the other side of the contract. |
 
 ## Running them
 
@@ -87,3 +88,20 @@ conditional proof is never mistaken for an unconditional one, and the repair
 loop treats each precondition as fixed: a patch may not weaken, add, or drop
 one. `lc_watch_result_contract.c` is exactly this — the same table write as the
 bounds example, but as the real unguarded leaf under its caller contract.
+
+### Checking the callers (assume/guarantee)
+
+A precondition is only sound if the callers honor it. When another function in
+the same file calls a contracted one, the checker turns that callee's
+`VW_REQUIRE` into an obligation on the **caller**: at the call, it must pass
+arguments the contract allows. This is assume/guarantee reasoning — assume a
+function's own precondition when verifying it, assert it at every call site — so
+the two sides meet: the leaf is proved *given* its contract, and each caller is
+proved to *provide* it (or refuted, with the caller input that breaks it).
+
+`lc_watch_caller.c` shows both callers of the leaf: one guards the index and is
+proved to honor the contract; an off-by-one caller (`<=`) is refuted at the
+caller index `LC_MAX_WATCHPOINTS`. A violation is charged to the caller, not the
+callee — the fix is to guard the call, and the callee's contract stays as
+given. (Cross-file callers, where the callee's contract lives in a header, are
+the next step; today both sides must be in the submitted file.)

@@ -17,7 +17,14 @@ import {
   type VerifyResult,
 } from '@verifier/shared';
 import type { CoreConfig } from './config';
-import { expandContracts, isTriviallyFalse, parseContracts } from './contracts';
+import {
+  contractedCallsFrom,
+  expandContracts,
+  expandContractsForEntry,
+  isTriviallyFalse,
+  parseContracts,
+  preconditionOf,
+} from './contracts';
 import { ENGINE_LABELS, SOLVER_LABELS, type EngineDetector } from './detect';
 import { cbmc } from './engines/cbmc';
 import { esbmc } from './engines/esbmc';
@@ -191,6 +198,47 @@ function annotate(f: Finding): Finding {
   return f;
 }
 
+/**
+ * Names a contract obligation after the callee's precondition it checks. The
+ * finding's `function` is the callee, `entry` the caller under verification.
+ */
+function enrichContract(f: Finding, code: string, functions: FunctionInfo[]): Finding {
+  if (f.kind !== 'contract') return f;
+  const expr = preconditionOf(code, f.function, functions);
+  const out: Finding = {
+    ...f,
+    message: expr ? `precondition of ${f.function}: ${expr}` : `precondition of ${f.function}`,
+  };
+  if (f.status === 'refuted') {
+    out.note =
+      `${f.entry} reaches ${f.function}(…) with arguments its precondition rejects; the ` +
+      'counterexample is the caller input that does it. Guard the call or fix the caller — the callee ' +
+      'contract stays as given.';
+  }
+  return out;
+}
+
+/**
+ * The source one entry is verified against. When the entry calls a contracted
+ * function, that callee's precondition becomes an assert the entry must satisfy,
+ * so the run is written to its own directory (the shared file keeps every
+ * precondition as an assume, which is right for a function verified on its own).
+ */
+async function entryContext(
+  ctx: RunContext,
+  engine: EngineId,
+  code: string,
+  entry: string,
+  functions: FunctionInfo[],
+): Promise<RunContext> {
+  if (contractedCallsFrom(code, entry, functions).length === 0) return ctx;
+  const dir = path.join(ctx.dir, `entry_${entry.replace(/\W/g, '_')}`);
+  await fs.mkdir(dir, { recursive: true });
+  const entryCode = expandContractsForEntry(code, engine, entry, functions);
+  await fs.writeFile(path.join(dir, ctx.fileName), entryCode);
+  return { ...ctx, dir, code: entryCode };
+}
+
 function summarize(fn: FunctionInfo, run: FunctionRun, findings: Finding[]): FunctionSummary {
   const counts = countOf(findings);
   const summary: FunctionSummary = {
@@ -319,7 +367,8 @@ export async function verifyDetailed(
       targets.map(async (fn): Promise<{ summary: FunctionSummary; findings: Finding[] }> => {
         let run: FunctionRun;
         try {
-          run = await adapter.verifyFunction(ctx, fn, analysis);
+          const runCtx = await entryContext(ctx, r.engine, req.code, fn.name, analysis.functions);
+          run = await adapter.verifyFunction(runCtx, fn, analysis);
         } catch (e) {
           if (!(e instanceof EngineError)) throw e;
           run = { findings: [], durationMs: 0, unwindIncomplete: false, error: e.message };
@@ -327,7 +376,9 @@ export async function verifyDetailed(
         seen ??= run.solverSeen;
         const findings = (
           run.findings.length || !run.error ? run.findings : undecided(fn, run.timedOut ? 'timeout' : 'error')
-        ).map(annotate);
+        )
+          .map(annotate)
+          .map((f) => enrichContract(f, req.code, analysis.functions));
         const summary = summarize(fn, run, findings);
         onProgress?.({ type: 'function', summary });
         return { summary, findings };

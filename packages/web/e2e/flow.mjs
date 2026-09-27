@@ -127,6 +127,20 @@ try {
       /Proved under preconditions[\s\S]*WatchIndex < LC_MAX_WATCHPOINTS/,
     );
   });
+
+  await step('A caller is checked against the callee contract it must honor', async () => {
+    await page.goto(`${BASE}/new`);
+    await page.locator('#nr-sample').selectOption('lc-watch-caller');
+    await page.getByRole('button', { name: /^Verify/ }).click();
+    await page.waitForURL(/\/runs\/\d+$/, { timeout: 120_000 });
+    // The off-by-one caller violates the leaf's precondition, charged to the caller.
+    assert.match(await text(page.locator('.fp-banner')), /1 refuted · 2 proved/);
+    const card = await text(page.locator('.fp-card').first());
+    assert.match(card, /precondition of record_watch_result/i);
+    assert.match(card, /process_watchpoint_offbyone · line \d+ · contract · WatchIndex=176/);
+    // The guarding caller is proved to honor it.
+    assert.match(await text(page.locator('.fp-list.tone-green')), /process_watchpoint#contract/);
+  });
   await context.close();
 
   await step('Without a server, the recorded demo replays', async () => {

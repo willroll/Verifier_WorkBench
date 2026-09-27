@@ -155,4 +155,35 @@ describe.skipIf(!cbmc)('cFS examples', () => {
     expect(bad).toBeTruthy();
     expect(num(bad, 'WatchIndex')).toBeGreaterThanOrEqual(176n);
   });
+
+  it('checks callers against the leaf contract: honoring proved, off-by-one refuted', async () => {
+    const r = await verify(
+      { code: read('lc_watch_caller.c'), fileName: 'lc_watch_caller.c', engine: 'cbmc', solver: 'minisat' },
+      deps,
+    );
+    expect(r.status).toBe('refuted');
+
+    // The guarding caller is proved to honor record_watch_result's precondition.
+    const ok = r.findings.find(
+      (f) =>
+        f.kind === 'contract' &&
+        f.entry === 'process_watchpoint' &&
+        f.function === 'record_watch_result' &&
+        f.status === 'proved',
+    )!;
+    expect(ok).toBeTruthy();
+
+    // The off-by-one caller is refuted, with the caller index one past the end.
+    const bad = r.findings.find(
+      (f) => f.kind === 'contract' && f.entry === 'process_watchpoint_offbyone' && f.status === 'refuted',
+    )!;
+    expect(bad).toBeTruthy();
+    expect(num(bad, 'WatchIndex')).toBe(176n);
+
+    // The leaf itself is still proved in bounds under its own (assumed) contract.
+    const leaf = r.findings.find(
+      (f) => f.entry === 'record_watch_result' && f.kind === 'bounds' && f.status === 'proved',
+    )!;
+    expect(leaf).toBeTruthy();
+  });
 });
