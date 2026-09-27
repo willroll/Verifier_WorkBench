@@ -31,15 +31,36 @@ const ASSERT: Record<EngineId, string> = {
   esbmc: '__ESBMC_assert',
 };
 
+// Loop invariants. `VW_INVARIANT(cond)` between a loop's head and body states an
+// invariant the checker uses to reason about the loop for *any* number of
+// iterations, instead of unwinding it a fixed number of times. It expands to
+// the engine's loop-invariant builtin (applied by goto-instrument for CBMC), so
+// a bounded-model checker can prove an unbounded loop safe.
+const LOOP_INVARIANT: Record<EngineId, string> = {
+  cbmc: '__CPROVER_loop_invariant',
+  esbmc: '__ESBMC_loop_invariant',
+};
+const INVARIANT_G = /\bVW_INVARIANT\b/g;
+
 const MACRO = /\b(VW_REQUIRE|VW_ASSUME)\b/;
 const MACRO_G = /\b(VW_REQUIRE|VW_ASSUME)\b/g;
 
 /** True if the source uses any precondition macro. */
 export const hasContracts = (code: string) => MACRO.test(code);
 
-/** Replace the precondition macros with the engine's assume builtin. */
+/** True if the source uses the VW_INVARIANT macro (before expansion). */
+export const usesLoopInvariants = (code: string) => /\bVW_INVARIANT\b/.test(code);
+
+/** True once expanded: the source carries a loop invariant the checker must apply. */
+export const hasLoopContracts = (code: string) => /\b__(?:CPROVER|ESBMC)_loop_invariant\b/.test(code);
+
+/** Replace VW_INVARIANT with the engine's loop-invariant builtin (name only). */
+export const expandInvariants = (code: string, engine: EngineId): string =>
+  code.replace(INVARIANT_G, LOOP_INVARIANT[engine]);
+
+/** Replace the precondition macros with the engine's assume builtin, and any loop invariants. */
 export function expandContracts(code: string, engine: EngineId): string {
-  return code.replace(MACRO_G, ASSUME[engine]);
+  return expandInvariants(code.replace(MACRO_G, ASSUME[engine]), engine);
 }
 
 export interface Precondition {
@@ -62,14 +83,14 @@ interface ContractSite extends Precondition {
 }
 
 /**
- * Every precondition macro with its offsets. Comments and string literals are
- * blanked first (keeping positions), so a macro name in either does not count
- * and a `)` inside a string does not close the argument early.
+ * Every occurrence of the named macros with its offsets. Comments and string
+ * literals are blanked first (keeping positions), so a macro name in either
+ * does not count and a `)` inside a string does not close the argument early.
  */
-function contractSites(code: string): ContractSite[] {
+function macroSites(code: string, alternation: string): ContractSite[] {
   const blanked = blankCommentsAndStrings(code);
   const out: ContractSite[] = [];
-  const re = /\b(VW_REQUIRE|VW_ASSUME)\b[ \t]*\(/g;
+  const re = new RegExp(`\\b(${alternation})\\b[ \\t]*\\(`, 'g');
   let m: RegExpExecArray | null;
   while ((m = re.exec(blanked))) {
     const open = m.index + m[0].length - 1; // the '(' after the macro name
@@ -96,6 +117,19 @@ function contractSites(code: string): ContractSite[] {
     re.lastIndex = i + 1;
   }
   return out;
+}
+
+const contractSites = (code: string): ContractSite[] => macroSites(code, 'VW_REQUIRE|VW_ASSUME');
+
+/** A loop invariant the source states, in order. */
+export interface Invariant {
+  expr: string;
+  line: number;
+}
+
+/** The loop invariants a source states (VW_INVARIANT), in order. */
+export function parseInvariants(code: string): Invariant[] {
+  return macroSites(code, 'VW_INVARIANT').map(({ expr, line }) => ({ expr, line }));
 }
 
 /**
@@ -154,7 +188,7 @@ export function expandContractsForEntry(
   functions: FnLine[],
 ): string {
   const sites = contractSites(code);
-  if (sites.length === 0) return code;
+  if (sites.length === 0) return expandInvariants(code, engine);
   const byLine = [...functions].sort((a, b) => a.line - b.line);
   const contractedCallees = new Set(
     sites.map((s) => ownerOf(s.line, byLine)).filter((f): f is string => !!f && f !== entry),
@@ -172,7 +206,7 @@ export function expandContractsForEntry(
       : `${ASSUME[engine]}${code.slice(s.open, s.close + 1)}`;
     pos = s.close + 1;
   }
-  return out + code.slice(pos);
+  return expandInvariants(out + code.slice(pos), engine);
 }
 
 /** The contracted callees `entry` calls in this source (those whose contract it must honor). */

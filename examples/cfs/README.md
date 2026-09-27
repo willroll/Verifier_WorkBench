@@ -20,6 +20,7 @@ reports `a` and `b`.
 | [`lc_watch_result_bounds.c`](lc_watch_result_bounds.c) | An indexed write to LC's watchpoint results table stays in bounds | **Proved** under LC's guard; the off-by-one variant is **refuted** at index `LC_MAX_WATCHPOINTS` | Default checks; uses LC's real results-table entry type and table size (176). The array-bounds check does the work. |
 | [`lc_watch_result_contract.c`](lc_watch_result_contract.c) | The same table write, but in a leaf with **no** internal guard — proved in bounds under the precondition `VW_REQUIRE(WatchIndex < LC_MAX_WATCHPOINTS)` | **Proved** under the contract; **refuted** without it, at an index past the end | Default checks. The precondition is the contract LC's callers enforce; it is surfaced with the result so the proof reads as conditional. |
 | [`lc_watch_caller.c`](lc_watch_caller.c) | Callers of that leaf must satisfy its precondition | Guarding caller **proved** to honor it; off-by-one caller (`<=`) **refuted** at the caller index `LC_MAX_WATCHPOINTS` | Default checks. The callee's `VW_REQUIRE` becomes an obligation on each caller — assume/guarantee reasoning, the other side of the contract. |
+| [`lc_watch_scan_invariant.c`](lc_watch_scan_invariant.c) | A compaction scan whose trip count is a caller variable keeps its indexed writes in bounds | **Proved** for every count with `VW_INVARIANT(w <= k)`; **inconclusive** without it | Default checks. The loop invariant lets the checker prove the loop for any number of iterations instead of unwinding it a fixed number of times. |
 
 ## Running them
 
@@ -53,6 +54,20 @@ sed 's/\bVW_REQUIRE\b/__CPROVER_assume/g' examples/cfs/lc_watch_result_contract.
 cbmc /tmp/contract.c --function record_watch_result \
   --bounds-check --pointer-check --div-by-zero-check
 # drop the VW_REQUIRE line instead, and the same write is refuted out of bounds
+```
+
+`VW_INVARIANT` is the loop-invariant builtin, applied by `goto-instrument`
+(CBMC applies loop contracts through the goto pipeline, not directly). Expand
+both macros, then compile → instrument the checks → apply the loop contract →
+verify:
+
+```bash
+sed -e 's/\bVW_REQUIRE\b/__CPROVER_assume/g' -e 's/\bVW_INVARIANT\b/__CPROVER_loop_invariant/g' \
+  examples/cfs/lc_watch_scan_invariant.c > /tmp/scan.c
+goto-cc /tmp/scan.c --function compact_stale_results -o /tmp/a.goto
+goto-instrument --bounds-check --pointer-check --div-by-zero-check /tmp/a.goto /tmp/b.goto
+goto-instrument --apply-loop-contracts /tmp/b.goto /tmp/c.goto
+cbmc /tmp/c.goto          # proved for every count; drop the VW_INVARIANT line and it is inconclusive
 ```
 
 ## Why these functions
@@ -105,3 +120,28 @@ caller index `LC_MAX_WATCHPOINTS`. A violation is charged to the caller, not the
 callee — the fix is to guard the call, and the callee's contract stays as
 given. (Cross-file callers, where the callee's contract lives in a header, are
 the next step; today both sides must be in the submitted file.)
+
+## Loop invariants (unbounded loops)
+
+A bounded model checker unwinds each loop a fixed number of times (`--unwind`).
+A loop whose trip count is a caller-supplied variable — most flight-code scans,
+copies and checksums — has no fixed bound that covers every count, so it comes
+out **inconclusive**: the unwinding assertion fails, and nothing on its paths is
+proved.
+
+`VW_INVARIANT(cond)`, written between a loop's head and its body, states a loop
+invariant. The checker (via `goto-instrument --apply-loop-contracts`) then
+*abstracts* the loop by its invariant — prove it holds on entry, prove one
+arbitrary iteration preserves it, and reason about the code after the loop from
+the invariant and the negated guard — instead of unwinding. That turns the
+inconclusive result into a real proof that holds for **any** number of
+iterations.
+
+`lc_watch_scan_invariant.c` compacts the stale entries of LC's results table.
+Its read index `k` is bounded by the loop guard, but the write index `w` is not:
+only `VW_INVARIANT(w <= k)` keeps the write in the table. With it, the indexed
+writes are proved in bounds for every count; without it they are inconclusive.
+A loop invariant that is not inductive (does not survive an iteration) is
+reported as a distinct `invariant` finding, so a too-weak invariant is never
+mistaken for a proof. Termination is not verified (a safety proof, not total
+correctness). Loop invariants are applied by CBMC.

@@ -141,6 +141,19 @@ try {
     // The guarding caller is proved to honor it.
     assert.match(await text(page.locator('.fp-list.tone-green')), /process_watchpoint#contract/);
   });
+
+  await step('An unbounded loop is proved by its VW_INVARIANT', async () => {
+    await page.goto(`${BASE}/new`);
+    await page.locator('#nr-sample').selectOption('lc-watch-scan');
+    await page.getByRole('button', { name: /^Verify/ }).click();
+    await page.waitForURL(/\/runs\/\d+$/, { timeout: 120_000 });
+    // Proved for every count — no refutations, nothing left inconclusive.
+    assert.match(await text(page.locator('.fp-banner')), /0 refuted/);
+    assert.equal(await page.locator('.fp-card').count(), 0, 'no findings');
+    assert.equal(await page.locator('.fp-empty').count(), 1, 'all obligations discharged');
+    // The loop invariant was discharged (base case + inductive step).
+    assert.match(await text(page.locator('.fp-list.tone-green')), /compact_stale_results#invariant/);
+  });
   await context.close();
 
   await step('Without a server, the recorded demo replays', async () => {

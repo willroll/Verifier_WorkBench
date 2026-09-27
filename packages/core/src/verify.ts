@@ -218,6 +218,19 @@ function enrichContract(f: Finding, code: string, functions: FunctionInfo[]): Fi
   return out;
 }
 
+/** Explains a broken loop invariant so the reader knows to strengthen it. */
+function enrichInvariant(f: Finding): Finding {
+  if (f.kind !== 'invariant' || f.status !== 'refuted') return f;
+  const note = /preserved/i.test(f.message)
+    ? 'The loop invariant does not hold after an iteration — it is not inductive. Strengthen it so the ' +
+      'loop body, given the invariant and the loop guard, re-establishes it; the counterexample is a ' +
+      'state where it breaks.'
+    : /before entry|on entry/i.test(f.message)
+      ? 'The loop invariant does not hold on entry to the loop. Weaken it, or establish it before the loop.'
+      : 'The loop invariant could not be discharged; it may be too weak to prove the loop safe.';
+  return { ...f, note };
+}
+
 /**
  * The source one entry is verified against. When the entry calls a contracted
  * function, that callee's precondition becomes an assert the entry must satisfy,
@@ -378,7 +391,8 @@ export async function verifyDetailed(
           run.findings.length || !run.error ? run.findings : undecided(fn, run.timedOut ? 'timeout' : 'error')
         )
           .map(annotate)
-          .map((f) => enrichContract(f, req.code, analysis.functions));
+          .map((f) => enrichContract(f, req.code, analysis.functions))
+          .map(enrichInvariant);
         const summary = summarize(fn, run, findings);
         onProgress?.({ type: 'function', summary });
         return { summary, findings };

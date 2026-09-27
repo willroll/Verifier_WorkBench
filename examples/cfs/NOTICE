@@ -12,13 +12,14 @@ configuration values taken from NASA's Core Flight System (cFS):
     fsw/src/lc_watch.c                   (the LC_OperData.WRTPtr[WatchIndex] write pattern)
 
 Copied functions are delimited in each file between "verbatim from …" and
-"end …" markers. lc_watch_result_bounds.c, lc_watch_result_contract.c and
-lc_watch_caller.c use LC's results-table entry type and table size, with
-accessor and caller functions written for this project that model LC's indexed
-table writes — guarded in the bounds example, left unguarded under a caller
-precondition in the contract example, and called from a validating caller in
-the caller example, as LC's own control flow does. Everything outside the copied
-portions (the verification harnesses) is original to this project.
+"end …" markers. lc_watch_result_bounds.c, lc_watch_result_contract.c,
+lc_watch_caller.c and lc_watch_scan_invariant.c use LC's results-table entry
+type and table size, with accessor, caller and scan functions written for this
+project that model LC's indexed table writes — guarded in the bounds example,
+left unguarded under a caller precondition in the contract example, called from
+a validating caller in the caller example, and swept by an unbounded compaction
+loop in the scan example. Everything outside the copied portions (the
+verification harnesses) is original to this project.
 
 NASA Docket No. GSC-19,200-1, identified as "cFS Draco".
 Copyright (c) 2023 United States Government as represented by the
