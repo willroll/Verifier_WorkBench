@@ -11,6 +11,7 @@ import type {
   WitnessValue,
 } from '@verifier/shared';
 import { bitsToHex, classify } from '../classify';
+import { CONTRACT_MARKER } from '../contracts';
 import type { RunResult } from '../runner';
 import {
   EngineError,
@@ -366,7 +367,8 @@ export function cbmcTraceSteps(trace: CbmcStep[], entry: string, max = 200): Tra
         text = `return from ${s.function?.displayName ?? s.function?.identifier ?? '?'}`;
         break;
       case 'failure':
-        text = `violated: ${s.reason ?? ''}`;
+        // The marker on a callee-precondition assert is internal; show intent.
+        text = `violated: ${s.reason === CONTRACT_MARKER ? "callee's precondition" : (s.reason ?? '')}`;
         break;
       default:
         text = '';
@@ -395,11 +397,14 @@ export function cbmcFindings(
     const owner = r.sourceLocation?.function ?? '';
     const own = owner === entry;
     const library = owner !== '' && !userFunctions.has(owner) && !owner.startsWith('__CPROVER');
+    // A callee's precondition, asserted at the caller under test: kept whatever
+    // function it sits in, since it is this entry's obligation to satisfy.
+    const contract = (r.description ?? '') === CONTRACT_MARKER;
     // Library SUCCESS may be vacuous (never reached from this entry), so only its failures count.
-    if (!own && !(library && r.status !== 'SUCCESS')) continue;
+    if (!own && !contract && !(library && r.status !== 'SUCCESS')) continue;
 
     const id = r.property ?? `${owner}.unnamed`;
-    const kind = kindOf(r);
+    const kind = contract ? 'contract' : kindOf(r);
     let status: ObligationStatus;
     let reason: InconclusiveReason | undefined;
     if (r.status === 'SUCCESS') {
@@ -417,7 +422,9 @@ export function cbmcFindings(
       id,
       status,
       kind,
-      message: r.description ?? '',
+      // A contract finding sits in the callee but is charged to the caller
+      // (entry); verify() rewrites this with the precondition's own text.
+      message: contract ? `precondition of ${owner || 'the callee'}` : (r.description ?? ''),
       file: r.sourceLocation?.file ?? '',
       line: Number(r.sourceLocation?.line ?? 0),
       function: owner || entry,

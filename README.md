@@ -76,6 +76,13 @@ exactly which bounds applied:
   proof is never mistaken for an unconditional one; a precondition that can
   never hold is flagged vacuous. The repair loop treats them as fixed: a patch
   may not weaken, add, or drop one.
+- **Caller contracts (assume/guarantee).** When a function in the file calls a
+  contracted one, that callee's `VW_REQUIRE` becomes an obligation on the
+  caller: it must pass arguments the contract allows, or the call is refuted
+  (a `contract` finding) with the caller input that breaks it. So a precondition
+  is assumed when the callee is verified and asserted at every call site — the
+  two sides meet. Violations are charged to the caller; the callee's contract
+  stays fixed. (Both functions must be in the submitted file for now.)
 
 ## Verified repair
 
@@ -188,6 +195,9 @@ harnesses over real flight code from NASA's
   leaf: proved in bounds under the precondition
   `VW_REQUIRE(WatchIndex < LC_MAX_WATCHPOINTS)`, and refuted without it. It shows
   a caller contract turning a false alarm into an honest, conditional proof.
+- **`lc_watch_caller.c`** checks the other side: a caller that guards the index
+  is proved to honor the leaf's precondition, and an off-by-one caller is refuted
+  with the caller index one past the end — assume/guarantee reasoning across a call.
 
 Each sample carries the engine settings and check set that make its point. The
 `CFE_TIME` proofs run with overflow checks **off**, because cFS time wraps

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { expandContracts, hasContracts, isTriviallyFalse, parseContracts } from '../src/contracts';
+import {
+  contractedCallsFrom,
+  expandContracts,
+  expandContractsForEntry,
+  hasContracts,
+  isTriviallyFalse,
+  parseContracts,
+  preconditionOf,
+} from '../src/contracts';
 import { sourceGuards } from '../src/repair/guards';
 
 // Preconditions: VW_REQUIRE(expr) / VW_ASSUME(expr) state a caller contract.
@@ -98,5 +106,62 @@ describe('contracts: repair guard keeps the precondition fixed', () => {
   it('rejects adding a precondition that was not given', () => {
     const added = patch('table[i] = v;', 'VW_REQUIRE(v != 0);\n    table[i] = v;');
     expect(sourceGuards(SRC, added, SRC)?.guard).toBe('contracts');
+  });
+});
+
+describe('contracts: per-entry transform (assume/guarantee)', () => {
+  // A callee with a precondition and two callers of it, one guarded correctly.
+  const CALLER = `#include <stdint.h>
+void store(uint16_t i, uint8_t v) {
+    VW_REQUIRE(i < 176);
+    table[i] = v;
+}
+void process(uint16_t idx, uint8_t v) {
+    if (idx < 176) store(idx, v);
+}
+`;
+  const fns = [
+    { name: 'store', line: 2 },
+    { name: 'process', line: 6 },
+  ];
+
+  it('assumes a function’s own precondition when it is the entry', () => {
+    const out = expandContractsForEntry(CALLER, 'cbmc', 'store', fns);
+    expect(out).toContain('__CPROVER_assume(i < 176)');
+    expect(out).not.toContain('__CPROVER_assert');
+  });
+
+  it('asserts a called callee’s precondition, with the marker, in the caller’s run', () => {
+    const out = expandContractsForEntry(CALLER, 'cbmc', 'process', fns);
+    expect(out).toContain('__CPROVER_assert(i < 176, "vw-precondition")');
+    expect(out).not.toContain('__CPROVER_assume');
+  });
+
+  it('uses the engine’s assert builtin', () => {
+    expect(expandContractsForEntry(CALLER, 'esbmc', 'process', fns)).toContain('__ESBMC_assert(i < 176,');
+  });
+
+  it('keeps the line count exact so counterexample lines stay true', () => {
+    for (const entry of ['store', 'process']) {
+      const out = expandContractsForEntry(CALLER, 'cbmc', entry, fns);
+      expect(out.split('\n')).toHaveLength(CALLER.split('\n').length);
+    }
+  });
+
+  it('reports the contracted callees a function calls', () => {
+    expect(contractedCallsFrom(CALLER, 'process', fns)).toEqual(['store']);
+    expect(contractedCallsFrom(CALLER, 'store', fns)).toEqual([]);
+  });
+
+  it('does not assert the precondition of a callee the entry never calls', () => {
+    // `other` does not call store, so store's precondition stays an assume.
+    const twoCallers = CALLER + `void other(void) { return; }\n`;
+    const out = expandContractsForEntry(twoCallers, 'cbmc', 'other', [...fns, { name: 'other', line: 9 }]);
+    expect(out).not.toContain('__CPROVER_assert');
+  });
+
+  it('exposes a function’s precondition expression', () => {
+    expect(preconditionOf(CALLER, 'store', fns)).toBe('i < 176');
+    expect(preconditionOf(CALLER, 'process', fns)).toBeUndefined();
   });
 });

@@ -7,6 +7,7 @@ import cfeTimeCompare from '../../../examples/cfs/cfe_time_compare.c?raw';
 import cfeTimeCompareOrder from '../../../examples/cfs/cfe_time_compare_order.c?raw';
 import lcWatchResultBounds from '../../../examples/cfs/lc_watch_result_bounds.c?raw';
 import lcWatchResultContract from '../../../examples/cfs/lc_watch_result_contract.c?raw';
+import lcWatchCaller from '../../../examples/cfs/lc_watch_caller.c?raw';
 import { SAMPLE_CODE, SAMPLE_FILE } from './sample';
 
 // Curated examples offered on the New Run page. Each carries the engine
@@ -76,6 +77,13 @@ export const SAMPLES: Sample[] = [
     fileName: 'lc_watch_result_contract.c',
     code: lcWatchResultContract,
     note: 'A real caller-contract leaf: the table write has no internal guard, so VW_REQUIRE states the bound LC’s callers enforce. Under it the write is proved in bounds; the precondition is shown with the result.',
+  },
+  {
+    id: 'lc-watch-caller',
+    label: 'cFS · LC caller — honors the contract',
+    fileName: 'lc_watch_caller.c',
+    code: lcWatchCaller,
+    note: 'Checks the other side of the contract: a caller that guards the index is proved to honor the leaf’s VW_REQUIRE; an off-by-one caller (≤) is refuted with the caller index one past the end.',
   },
 ];
 
