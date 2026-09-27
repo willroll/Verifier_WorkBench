@@ -35,6 +35,8 @@ export function FindingsPanel({
     seconds(r.durationMs),
   ].join(' · ');
 
+  const assumptions = r.assumptions ?? [];
+
   return (
     <div className="fp">
       <div className={`fp-banner${run.demo ? ' fp-banner-demo' : ''}`}>
@@ -46,6 +48,23 @@ export function FindingsPanel({
           {counts}
         </div>
       </div>
+
+      {assumptions.length > 0 ? (
+        <div className={`fp-assume${assumptions.some((a) => a.vacuous) ? ' fp-assume-bad' : ''}`}>
+          <div className="fp-assume-label">
+            PROVED ASSUMING{assumptions.some((a) => a.vacuous) ? ' — VACUOUS' : ''}
+          </div>
+          <ul className="fp-assume-list">
+            {assumptions.map((a, i) => (
+              <li key={i}>
+                {a.function ? `${a.function}(): ` : ''}
+                <code>{a.expr}</code>
+                {a.vacuous ? ' — can never hold; the proof means nothing' : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <h2 className="label fp-heading">
         FINDINGS ({refuted.length}) · {r.engineLabel}

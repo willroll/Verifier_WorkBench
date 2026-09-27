@@ -67,6 +67,39 @@
 .rp-strong {
   font-weight: 600;
 }
+/* Preconditions the result is granted under: a conditional proof, so the
+   accent rule, not a pass/fail tone. Red when a precondition is vacuous. */
+.rp-assume {
+  margin-top: 16px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  background: var(--chipbg);
+  break-inside: avoid;
+}
+.rp-assume-label {
+  font: 600 11px var(--sans);
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.rp-assume-list {
+  margin: 7px 0 0;
+  padding-left: 18px;
+  font: 400 12px/1.7 var(--mono);
+  color: var(--text);
+}
+.rp-assume-note {
+  margin: 8px 0 0;
+}
+.rp-assume-bad {
+  border-color: var(--redborder);
+  border-left-color: var(--red);
+  background: var(--redbg);
+}
+.rp-assume-bad .rp-assume-label {
+  color: var(--red);
+}
 .rp-h2 {
   font: 600 14px var(--sans);
   margin: 28px 0 10px;
@@ -223,12 +256,15 @@
     --greenbg: #e2ecdf;
     --amber: #7a5c26;
     --amberbg: #efe7d8;
+    --accent: #2a5db0;
+    --redborder: #dfb5ac;
   }
   .rp-doc {
     padding: 0;
     max-width: none;
   }
-  .rp-code {
+  .rp-code,
+  .rp-assume {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

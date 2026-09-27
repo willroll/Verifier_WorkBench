@@ -1,4 +1,5 @@
 import type { EquivalenceResult, FunctionSummary, Rejection, VerifyResult } from '@verifier/shared';
+import { parseContracts } from '../contracts';
 import type { FunctionInfo } from '../engines/types';
 import { checkIncludes } from '../source';
 import {
@@ -43,6 +44,22 @@ export function sourceGuards(original: string, candidate: string, baseline: stri
       message:
         `The patch adds verifier-specific or opaque code (${quoteList(constructs)}). That changes what ` +
         'the checker assumes or can see, not what the program does; fix the code itself.',
+    };
+  }
+  // Preconditions (VW_REQUIRE) are the caller's contract, not the model's to
+  // change: weakening, adding, or dropping one would let a broken patch pass.
+  const before = parseContracts(original)
+    .map((p) => p.expr)
+    .sort();
+  const after = parseContracts(candidate)
+    .map((p) => p.expr)
+    .sort();
+  if (before.length !== after.length || before.some((e, i) => e !== after[i])) {
+    return {
+      guard: 'contracts',
+      message:
+        'The patch changes the preconditions (VW_REQUIRE). Keep them exactly as given and repair the ' +
+        'implementation under them.',
     };
   }
   const macros = added(assertionMacros(original), assertionMacros(candidate));

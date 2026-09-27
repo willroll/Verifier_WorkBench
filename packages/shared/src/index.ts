@@ -141,10 +141,23 @@ export interface VerifyResult {
   checks: CheckId[];
   diagnostics: Diagnostic[];
   durationMs: number;
+  /** Preconditions the source stated (VW_REQUIRE); proofs hold only where they do. */
+  assumptions?: Assumption[];
   /** Condensed engine log (command lines and messages), truncated. */
   raw?: string;
   error?: string;
   hint?: string;
+}
+
+/** A caller-responsibility precondition stated with VW_REQUIRE, and where it applies. */
+export interface Assumption {
+  /** The function whose body states it, if known. */
+  function?: string;
+  /** The asserted C expression. */
+  expr: string;
+  line: number;
+  /** Set when the precondition can never hold, so proofs under it are vacuous. */
+  vacuous?: boolean;
 }
 
 export interface SmtlibRequest {
@@ -236,6 +249,7 @@ export type GuardId =
   | 'globals'
   | 'inconclusive'
   | 'obligations'
+  | 'contracts'
   | 'behavior';
 
 export interface Rejection {

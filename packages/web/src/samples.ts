@@ -6,6 +6,7 @@ import cfeTimeSubtract from '../../../examples/cfs/cfe_time_subtract.c?raw';
 import cfeTimeCompare from '../../../examples/cfs/cfe_time_compare.c?raw';
 import cfeTimeCompareOrder from '../../../examples/cfs/cfe_time_compare_order.c?raw';
 import lcWatchResultBounds from '../../../examples/cfs/lc_watch_result_bounds.c?raw';
+import lcWatchResultContract from '../../../examples/cfs/lc_watch_result_contract.c?raw';
 import { SAMPLE_CODE, SAMPLE_FILE } from './sample';
 
 // Curated examples offered on the New Run page. Each carries the engine
@@ -68,6 +69,13 @@ export const SAMPLES: Sample[] = [
     fileName: 'lc_watch_result_bounds.c',
     code: lcWatchResultBounds,
     note: 'Real NASA cFS types and table size. The correct guard proves the indexed write in bounds; an off-by-one guard is refuted with the one-past-the-end index.',
+  },
+  {
+    id: 'lc-watch-contract',
+    label: 'cFS · LC leaf — precondition (VW_REQUIRE)',
+    fileName: 'lc_watch_result_contract.c',
+    code: lcWatchResultContract,
+    note: 'A real caller-contract leaf: the table write has no internal guard, so VW_REQUIRE states the bound LC’s callers enforce. Under it the write is proved in bounds; the precondition is shown with the result.',
   },
 ];
 

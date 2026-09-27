@@ -68,6 +68,8 @@ function ReportView({ run }: { run: Run }) {
     ...(r.counts.inconclusive ? [`${r.counts.inconclusive} inconclusive`] : []),
   ].join(' · ');
   const resultTone = r.counts.refuted ? 'tone-red' : r.counts.inconclusive ? 'tone-amber' : 'tone-green';
+  const assumptions = r.assumptions ?? [];
+  const vacuous = assumptions.some((a) => a.vacuous);
   const parent = getRun(run.parentId);
 
   return (
@@ -103,6 +105,28 @@ function ReportView({ run }: { run: Run }) {
             Bound&ensp;<span className="rp-meta-v">loops unwound up to {r.bounds.unwind}×</span>
           </div>
         </div>
+
+        {assumptions.length > 0 ? (
+          <section className={`rp-assume${vacuous ? ' rp-assume-bad' : ''}`}>
+            <div className="rp-assume-label">
+              {vacuous ? 'Proved under a precondition that can never hold' : 'Proved under preconditions'}
+            </div>
+            <ul className="rp-assume-list">
+              {assumptions.map((a, i) => (
+                <li key={i}>
+                  {a.function ? `${a.function}(): ` : ''}
+                  <code>{a.expr}</code>
+                  {a.vacuous ? ' — vacuous; the proof establishes nothing' : ''}
+                </li>
+              ))}
+            </ul>
+            <p className="rp-note rp-assume-note">
+              {vacuous
+                ? 'A precondition above is always false, so every obligation holds trivially. Fix the precondition before trusting this result.'
+                : 'The obligations below are proved only where these preconditions hold. Each states a contract the function’s callers are required to satisfy; verify the callers enforce it.'}
+            </p>
+          </section>
+        ) : null}
 
         <h2 className="rp-h2">1 Proof obligations</h2>
         <div className="rp-table" role="table" aria-label="Proof obligations">

@@ -18,6 +18,7 @@ reports `a` and `b`.
 | [`cfe_time_compare.c`](cfe_time_compare.c) | The intuitive spec "`A_GT_B` ⇒ `TimeA.Seconds >= TimeB.Seconds`" | **Refuted** with a witness; the two guarded subtractions are proved safe | Default checks. The witness has the two times more than the ~68-year rollover apart. |
 | [`cfe_time_compare_order.c`](cfe_time_compare_order.c) | `CFE_TIME_Compare` is antisymmetric: A after B iff B before A | **Proved** for all inputs, rollover included | Default checks; the guarded subtractions are proved too. |
 | [`lc_watch_result_bounds.c`](lc_watch_result_bounds.c) | An indexed write to LC's watchpoint results table stays in bounds | **Proved** under LC's guard; the off-by-one variant is **refuted** at index `LC_MAX_WATCHPOINTS` | Default checks; uses LC's real results-table entry type and table size (176). The array-bounds check does the work. |
+| [`lc_watch_result_contract.c`](lc_watch_result_contract.c) | The same table write, but in a leaf with **no** internal guard — proved in bounds under the precondition `VW_REQUIRE(WatchIndex < LC_MAX_WATCHPOINTS)` | **Proved** under the contract; **refuted** without it, at an index past the end | Default checks. The precondition is the contract LC's callers enforce; it is surfaced with the result so the proof reads as conditional. |
 
 ## Running them
 
@@ -39,6 +40,20 @@ cbmc examples/cfs/lc_watch_result_bounds.c --function store_watch_result_offbyon
   --bounds-check --trace
 ```
 
+`VW_REQUIRE` is Verifier Workbench's own spelling of the engine's assume
+builtin; the app and checker expand it for you. To run the precondition example
+straight from the CLI, expand it first (CBMC's `-D` cannot take a function-like
+macro):
+
+```bash
+# proved in bounds under the caller contract
+sed 's/\bVW_REQUIRE\b/__CPROVER_assume/g' examples/cfs/lc_watch_result_contract.c \
+  > /tmp/contract.c
+cbmc /tmp/contract.c --function record_watch_result \
+  --bounds-check --pointer-check --div-by-zero-check
+# drop the VW_REQUIRE line instead, and the same write is refuted out of bounds
+```
+
 ## Why these functions
 
 cFS is written in C and built from small, self-contained modules, which makes
@@ -54,3 +69,21 @@ per-function only against a fixed loop bound; because these harnesses check
 each function with unconstrained inputs, the bounds example uses a
 fixed-size-table write (no unbounded loop), where the guard is what the checker
 reasons about.
+
+## Preconditions (caller contracts)
+
+Real flight code often pushes a bound up to the caller: LC's own leaf writes
+`LC_OperData.WRTPtr[WatchIndex].WatchResult` with **no** local check, because
+`LC_ProcessWP` only reaches it for a valid watchpoint. Checked in isolation
+with an unconstrained index, that leaf looks out of bounds — a false alarm from
+verifying a leaf without its caller.
+
+`VW_REQUIRE(expr)` (alias `VW_ASSUME(expr)`) states that contract in the
+source. The checker then verifies the function only where `expr` holds, so the
+honest result — "proved, *given* the caller keeps the index in range" — comes
+out instead of the false alarm. The precondition travels with the result (the
+workbench shows a **Proved assuming** panel; the report prints it), so a
+conditional proof is never mistaken for an unconditional one, and the repair
+loop treats each precondition as fixed: a patch may not weaken, add, or drop
+one. `lc_watch_result_contract.c` is exactly this — the same table write as the
+bounds example, but as the real unguarded leaf under its caller contract.

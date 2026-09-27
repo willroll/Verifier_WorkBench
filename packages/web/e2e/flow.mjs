@@ -105,6 +105,25 @@ try {
     assert.match(banner, /1 refuted · 2 proved/);
     assert.match(await text(page.locator('.wb-detail-title')), /assume_gt_means_larger_seconds/);
   });
+
+  await step('A precondition example proves under its contract and shows it', async () => {
+    await page.goto(`${BASE}/new`);
+    await page.locator('#nr-sample').selectOption('lc-watch-contract');
+    assert.match(await text(page.locator('.nr-sample-note')), /VW_REQUIRE|precondition/);
+    await page.getByRole('button', { name: /^Verify/ }).click();
+    await page.waitForURL(/\/runs\/\d+$/, { timeout: 120_000 });
+    assert.match(await text(page.locator('.fp-banner')), /0 refuted/);
+    // The "proved assuming" panel names the function and the precondition.
+    const assume = page.locator('.fp-assume');
+    await assume.waitFor();
+    assert.match(await text(assume), /PROVED ASSUMING/);
+    assert.match(await text(assume), /record_watch_result\(\):[\s\S]*WatchIndex < LC_MAX_WATCHPOINTS/);
+    assert.equal(await page.locator('.fp-assume-bad').count(), 0, 'the precondition is not vacuous');
+    // The report prints the same contract.
+    await page.getByRole('link', { name: 'Report', exact: true }).click();
+    await page.getByRole('heading', { name: 'Verification Report' }).waitFor();
+    assert.match(await text(page.locator('.rp-assume')), /Proved under preconditions[\s\S]*WatchIndex < LC_MAX_WATCHPOINTS/);
+  });
   await context.close();
 
   await step('Without a server, the recorded demo replays', async () => {
