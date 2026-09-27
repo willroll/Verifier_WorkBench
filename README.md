@@ -63,7 +63,8 @@ exactly which bounds applied:
 - **Three outcomes: proved, refuted, inconclusive.** Loops are unwound up to
   `unwind` (default 16) with unwinding assertions on. If a loop can run longer,
   that function's results are **inconclusive**, never proved; raise `unwind`
-  to settle them.
+  to settle them, or give the loop a `VW_INVARIANT` (below) to prove it for any
+  number of iterations.
 - **Arbitrary pointers.** Pointer arguments are arbitrary, possibly NULL or
   dangling. Findings that depend on this carry a `note`, since the caller may
   guarantee a valid pointer.
@@ -83,6 +84,13 @@ exactly which bounds applied:
   is assumed when the callee is verified and asserted at every call site — the
   two sides meet. Violations are charged to the caller; the callee's contract
   stays fixed. (Both functions must be in the submitted file for now.)
+- **Loop invariants.** A loop whose trip count is a variable has no fixed
+  unwind bound that covers every run, so it is inconclusive. `VW_INVARIANT(cond)`
+  between a loop's head and body states an invariant the checker uses to
+  abstract the loop — proving it for **any** number of iterations instead of
+  unwinding it (applied by CBMC via `goto-instrument`). A non-inductive
+  invariant is reported as its own `invariant` finding, never a silent pass;
+  termination is not verified (a safety proof). See the semantics note above.
 
 ## Verified repair
 
@@ -198,6 +206,9 @@ harnesses over real flight code from NASA's
 - **`lc_watch_caller.c`** checks the other side: a caller that guards the index
   is proved to honor the leaf's precondition, and an off-by-one caller is refuted
   with the caller index one past the end — assume/guarantee reasoning across a call.
+- **`lc_watch_scan_invariant.c`** proves an unbounded compaction loop: with
+  `VW_INVARIANT(w <= k)` the indexed writes are proved in bounds for every
+  count, where without it the loop is inconclusive.
 
 Each sample carries the engine settings and check set that make its point. The
 `CFE_TIME` proofs run with overflow checks **off**, because cFS time wraps

@@ -3,10 +3,14 @@ import {
   contractedCallsFrom,
   expandContracts,
   expandContractsForEntry,
+  expandInvariants,
   hasContracts,
+  hasLoopContracts,
   isTriviallyFalse,
   parseContracts,
+  parseInvariants,
   preconditionOf,
+  usesLoopInvariants,
 } from '../src/contracts';
 import { sourceGuards } from '../src/repair/guards';
 
@@ -163,5 +167,41 @@ void process(uint16_t idx, uint8_t v) {
   it('exposes a function’s precondition expression', () => {
     expect(preconditionOf(CALLER, 'store', fns)).toBe('i < 176');
     expect(preconditionOf(CALLER, 'process', fns)).toBeUndefined();
+  });
+});
+
+describe('contracts: loop invariants (VW_INVARIANT)', () => {
+  const LOOP = `void f(uint16_t n) {
+    for (uint16_t i = 0; i < n; i++)
+    VW_INVARIANT(i <= n)
+    {
+        buf[i] = 0;
+    }
+}
+`;
+
+  it('detects the macro and its expansion', () => {
+    expect(usesLoopInvariants(LOOP)).toBe(true);
+    expect(usesLoopInvariants('int x;')).toBe(false);
+    expect(hasLoopContracts(LOOP)).toBe(false); // not until expanded
+    expect(hasLoopContracts(expandInvariants(LOOP, 'cbmc'))).toBe(true);
+  });
+
+  it('expands to the engine loop-invariant builtin, name only, same line', () => {
+    expect(expandInvariants(LOOP, 'cbmc')).toContain('__CPROVER_loop_invariant(i <= n)');
+    expect(expandInvariants(LOOP, 'esbmc')).toContain('__ESBMC_loop_invariant(i <= n)');
+    expect(expandInvariants(LOOP, 'cbmc').split('\n')).toHaveLength(LOOP.split('\n').length);
+  });
+
+  it('is applied by expandContracts and expandContractsForEntry too', () => {
+    expect(expandContracts(LOOP, 'cbmc')).toContain('__CPROVER_loop_invariant(i <= n)');
+    expect(expandContractsForEntry(LOOP, 'cbmc', 'f', [{ name: 'f', line: 1 }])).toContain(
+      '__CPROVER_loop_invariant(i <= n)',
+    );
+  });
+
+  it('parses the invariant expressions and lines', () => {
+    expect(parseInvariants(LOOP)).toEqual([{ expr: 'i <= n', line: 3 }]);
+    expect(parseInvariants('int x;')).toEqual([]);
   });
 });

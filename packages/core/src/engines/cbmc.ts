@@ -11,7 +11,7 @@ import type {
   WitnessValue,
 } from '@verifier/shared';
 import { bitsToHex, classify } from '../classify';
-import { CONTRACT_MARKER } from '../contracts';
+import { CONTRACT_MARKER, hasLoopContracts } from '../contracts';
 import type { RunResult } from '../runner';
 import {
   EngineError,
@@ -289,7 +289,8 @@ export function cbmcSolverSeen(msgs: CbmcMessage[]): SolverSeen | undefined {
 export function formatValue(v: CbmcValue | undefined, depth = 0): string {
   if (!v) return '?';
   // CBMC prints integers as C literals ("14ul"); the type is reported separately.
-  if (v.data !== undefined) return v.data.replace(/^(-?\d+)(?:[uU]?[lL]{0,2}|[lL]{1,2}[uU])$/, '$1');
+  // On the goto path a value can arrive as a number, so coerce before matching.
+  if (v.data !== undefined) return String(v.data).replace(/^(-?\d+)(?:[uU]?[lL]{0,2}|[lL]{1,2}[uU])$/, '$1');
   if (depth < 2 && Array.isArray(v.members)) {
     return `{ ${v.members.map((m) => `${m.name ?? '?'}=${formatValue(m.value, depth + 1)}`).join(', ')} }`;
   }
@@ -445,14 +446,76 @@ export function cbmcFindings(
 
 // ---- Adapter -----------------------------------------------------------------
 
-async function run(ctx: RunContext, args: string[]): Promise<RunResult> {
-  ctx.log.push(`$ cbmc ${args.join(' ')}`);
-  const res = await ctx.runner.run(ctx.config.bins.cbmc, args, {
+function runBin(ctx: RunContext, bin: string, args: string[]): Promise<RunResult> {
+  ctx.log.push(`$ ${bin.split('/').pop()} ${args.join(' ')}`);
+  return ctx.runner.run(bin, args, {
     cwd: ctx.dir,
     timeoutMs: ctx.config.timeoutMs,
     maxOutputBytes: ctx.config.maxOutputBytes,
     memoryLimitMb: ctx.config.memoryLimitMb,
   });
+}
+
+async function run(ctx: RunContext, args: string[]): Promise<RunResult> {
+  const res = await runBin(ctx, ctx.config.bins.cbmc, args);
+  if (res.spawnError) throw new EngineError(`could not start CBMC: ${res.spawnError}`);
+  return res;
+}
+
+// goto-cc and goto-instrument ship next to CBMC (a path next to CBMC_BIN, else on PATH).
+const sibling = (ctx: RunContext, name: string) =>
+  ctx.config.bins.cbmc.includes('/') ? path.join(path.dirname(ctx.config.bins.cbmc), name) : name;
+
+const firstLine = (s: string) => s.trim().split('\n')[0] ?? '';
+
+/**
+ * Verify a function whose loops carry invariants. CBMC applies loop contracts
+ * through goto-instrument, not directly, so: the source is compiled to a goto
+ * binary (with this function as entry); the safety checks are instrumented into
+ * that binary; the loop contracts are applied, abstracting each annotated loop
+ * by its invariant instead of unwinding it; and CBMC checks the result. The
+ * checks are added before the loop transform, not by the final CBMC run, so
+ * they land on the user's code and not on goto-instrument's own loop
+ * bookkeeping (whose modular arithmetic would otherwise raise false overflows).
+ * Intermediate files are named per function so concurrent entries do not clash.
+ */
+async function loopContractsRun(ctx: RunContext, fn: string): Promise<RunResult> {
+  const base = fn.replace(/\W/g, '_') || 'entry';
+  const goto = sibling(ctx, 'goto-cc');
+  const instrument = sibling(ctx, 'goto-instrument');
+  const compiled = `${base}.goto`;
+  const checked = `${base}.checked.goto`;
+  const applied = `${base}.applied.goto`;
+
+  const step = async (bin: string, args: string[], what: string) => {
+    const r = await runBin(ctx, bin, args);
+    if (r.spawnError)
+      throw new EngineError(
+        `could not start ${bin.split('/').pop()} (needed for loop invariants): ${r.spawnError}`,
+      );
+    if (r.code !== 0) throw new EngineError(`${what}: ${firstLine(r.stderr) || 'unknown error'}`);
+    return r;
+  };
+
+  await step(goto, [ctx.fileName, '--function', fn, '-o', compiled], 'goto-cc could not compile the source');
+  await step(
+    instrument,
+    [...checkArgs(ctx.checks), compiled, checked],
+    'goto-instrument could not add the checks',
+  );
+  await step(
+    instrument,
+    ['--apply-loop-contracts', checked, applied],
+    'goto-instrument could not apply the loop invariant',
+  );
+
+  const res = await runBin(ctx, ctx.config.bins.cbmc, [
+    applied,
+    '--json-ui',
+    ...bound(ctx),
+    ...cbmcSolverArgs(ctx.solver),
+    ...ctx.config.extraFlags.cbmc,
+  ]);
   if (res.spawnError) throw new EngineError(`could not start CBMC: ${res.spawnError}`);
   return res;
 }
@@ -509,7 +572,11 @@ export const cbmc: EngineAdapter = {
 
   async verifyFunction(ctx, fn, analysis): Promise<FunctionRun> {
     const { userFunctions } = analysis.extra as CbmcExtra;
-    const res = await run(ctx, cbmcArgs.verify(ctx, fn.name));
+    // Loops with an invariant are proved by that invariant (for any number of
+    // iterations) instead of unwound; CBMC applies them via goto-instrument.
+    const res = hasLoopContracts(ctx.code)
+      ? await loopContractsRun(ctx, fn.name)
+      : await run(ctx, cbmcArgs.verify(ctx, fn.name));
     const msgs = parseJsonUi(res.stdout);
     const hasResults = msgs?.some((m) => Array.isArray(m.result)) ?? false;
     if (msgs)

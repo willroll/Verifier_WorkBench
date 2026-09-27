@@ -40,7 +40,9 @@ export type ObligationKind =
   | 'unwind'
   | 'assertion'
   /** A caller may pass a callee arguments its VW_REQUIRE precondition rejects. */
-  | 'contract';
+  | 'contract'
+  /** A loop-invariant obligation (VW_INVARIANT): the invariant holds and is inductive. */
+  | 'invariant';
 
 export type InconclusiveReason = 'unwind-bound' | 'not-checked' | 'unknown' | 'timeout' | 'error';
 

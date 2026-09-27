@@ -186,4 +186,42 @@ describe.skipIf(!cbmc)('cFS examples', () => {
     )!;
     expect(leaf).toBeTruthy();
   });
+
+  it('proves an unbounded scan loop via VW_INVARIANT (inconclusive without it)', async () => {
+    const code = read('lc_watch_scan_invariant.c');
+    const r = await verify(
+      { code, fileName: 'lc_watch_scan_invariant.c', engine: 'cbmc', solver: 'minisat' },
+      deps,
+    );
+    // With the invariant, the loop is abstracted and proved for every Count.
+    expect(r.status).toBe('proved');
+    expect(r.counts.refuted).toBe(0);
+    expect(r.counts.inconclusive).toBe(0);
+    // The indexed writes are proved in bounds, and the invariant is discharged.
+    expect(r.findings.some((f) => f.kind === 'bounds' && f.status === 'proved')).toBe(true);
+    expect(r.findings.some((f) => f.kind === 'invariant' && f.status === 'proved')).toBe(true);
+
+    // Remove the invariant: the unbounded loop can no longer be proved.
+    const noInv = code.replace(/\n\s*VW_INVARIANT\([^\n]*\)/, '');
+    const bare = await verify(
+      { code: noInv, fileName: 'lc_watch_scan_invariant.c', engine: 'cbmc', solver: 'minisat' },
+      deps,
+    );
+    expect(bare.status).toBe('inconclusive');
+    expect(bare.findings.some((f) => f.reason === 'unwind-bound')).toBe(true);
+  });
+
+  it('reports a loop invariant that is not inductive', async () => {
+    // A non-inductive invariant (i == 0 never survives an iteration) is caught
+    // as a distinct 'invariant' finding, not a silent pass.
+    const code = read('lc_watch_scan_invariant.c').replace('VW_INVARIANT(w <= k)', 'VW_INVARIANT(w == 0)');
+    const r = await verify(
+      { code, fileName: 'lc_watch_scan_invariant.c', engine: 'cbmc', solver: 'minisat' },
+      deps,
+    );
+    expect(r.status).toBe('refuted');
+    const bad = r.findings.find((f) => f.kind === 'invariant' && f.status === 'refuted')!;
+    expect(bad).toBeTruthy();
+    expect(bad.message).toMatch(/invariant/i);
+  });
 });

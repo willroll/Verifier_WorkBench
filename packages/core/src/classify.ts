@@ -11,6 +11,12 @@ export function classify(description: string, propertyId = ''): ObligationKind {
   const cls = segments.length >= 3 ? (segments[segments.length - 2] ?? '') : '';
   const d = `${description} ${cls}`.toLowerCase();
   if (d.includes('unwinding assertion') || cls === 'unwind') return 'unwind';
+  // Loop-contract obligations from goto-instrument --apply-loop-contracts: the
+  // invariant's base case and inductive step, its frame (assigns) checks, and
+  // the instrumentation guard. Grouped so a loop proved by its invariant reads
+  // as one kind, and a broken invariant is unmistakable.
+  if (d.includes('loop invariant') || d.includes('loop instrumentation') || cls === 'assigns')
+    return 'invariant';
   // CBMC reports narrowing as "arithmetic overflow on signed type conversion".
   if (d.includes('conversion')) return 'conversion';
   if (d.includes('shift')) return 'shift';

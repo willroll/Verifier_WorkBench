@@ -8,6 +8,7 @@ import cfeTimeCompareOrder from '../../../examples/cfs/cfe_time_compare_order.c?
 import lcWatchResultBounds from '../../../examples/cfs/lc_watch_result_bounds.c?raw';
 import lcWatchResultContract from '../../../examples/cfs/lc_watch_result_contract.c?raw';
 import lcWatchCaller from '../../../examples/cfs/lc_watch_caller.c?raw';
+import lcWatchScanInvariant from '../../../examples/cfs/lc_watch_scan_invariant.c?raw';
 import { SAMPLE_CODE, SAMPLE_FILE } from './sample';
 
 // Curated examples offered on the New Run page. Each carries the engine
@@ -84,6 +85,13 @@ export const SAMPLES: Sample[] = [
     fileName: 'lc_watch_caller.c',
     code: lcWatchCaller,
     note: 'Checks the other side of the contract: a caller that guards the index is proved to honor the leaf’s VW_REQUIRE; an off-by-one caller (≤) is refuted with the caller index one past the end.',
+  },
+  {
+    id: 'lc-watch-scan',
+    label: 'cFS · LC scan — unbounded loop (VW_INVARIANT)',
+    fileName: 'lc_watch_scan_invariant.c',
+    code: lcWatchScanInvariant,
+    note: 'An unbounded loop over a caller-set count. VW_INVARIANT(w <= k) lets the checker prove the indexed writes in bounds for every count, instead of unwinding — inconclusive without it, proved with it.',
   },
 ];
 
