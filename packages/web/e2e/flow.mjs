@@ -122,7 +122,10 @@ try {
     // The report prints the same contract.
     await page.getByRole('link', { name: 'Report', exact: true }).click();
     await page.getByRole('heading', { name: 'Verification Report' }).waitFor();
-    assert.match(await text(page.locator('.rp-assume')), /Proved under preconditions[\s\S]*WatchIndex < LC_MAX_WATCHPOINTS/);
+    assert.match(
+      await text(page.locator('.rp-assume')),
+      /Proved under preconditions[\s\S]*WatchIndex < LC_MAX_WATCHPOINTS/,
+    );
   });
   await context.close();
 
