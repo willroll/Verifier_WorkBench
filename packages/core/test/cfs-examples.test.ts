@@ -116,4 +116,43 @@ describe.skipIf(!cbmc)('cFS examples', () => {
     const bad = r.findings.find((f) => f.entry === 'store_watch_result_offbyone' && f.status === 'refuted')!;
     expect(num(bad, 'WatchIndex')).toBe(176n);
   });
+
+  it('proves the unguarded leaf write under its VW_REQUIRE precondition', async () => {
+    const code = read('lc_watch_result_contract.c');
+    const r = await verify(
+      { code, fileName: 'lc_watch_result_contract.c', engine: 'cbmc', solver: 'minisat' },
+      deps,
+    );
+    // Under the caller contract the indexed write is proved in bounds.
+    expect(r.status).toBe('proved');
+    expect(r.counts.refuted).toBe(0);
+    const write = r.findings.find(
+      (f) => f.entry === 'record_watch_result' && f.kind === 'bounds' && f.status === 'proved',
+    )!;
+    expect(write).toBeTruthy();
+
+    // The precondition is surfaced on the result, attributed to its function,
+    // and is not vacuous (it can hold).
+    expect(r.assumptions).toBeDefined();
+    const a = r.assumptions!.find((x) => x.function === 'record_watch_result')!;
+    expect(a.expr).toBe('WatchIndex < LC_MAX_WATCHPOINTS');
+    expect(a.vacuous).toBeUndefined();
+  });
+
+  it('refutes the same leaf write once the precondition is removed', async () => {
+    // Drop the VW_REQUIRE line: with no caller contract, the unconstrained
+    // index is out of bounds — the false alarm the contract exists to answer.
+    const code = read('lc_watch_result_contract.c').replace(/^\s*VW_REQUIRE\(.*\);\s*$/m, '');
+    const r = await verify(
+      { code, fileName: 'lc_watch_result_contract.c', engine: 'cbmc', solver: 'minisat' },
+      deps,
+    );
+    expect(r.status).toBe('refuted');
+    expect(r.assumptions).toBeUndefined();
+    const bad = r.findings.find(
+      (f) => f.entry === 'record_watch_result' && f.kind === 'bounds' && f.status === 'refuted',
+    )!;
+    expect(bad).toBeTruthy();
+    expect(num(bad, 'WatchIndex')).toBeGreaterThanOrEqual(176n);
+  });
 });

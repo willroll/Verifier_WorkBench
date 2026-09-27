@@ -68,6 +68,14 @@ exactly which bounds applied:
   dangling. Findings that depend on this carry a `note`, since the caller may
   guarantee a valid pointer.
 - **Initial globals.** Global variables start at their initial values.
+- **Preconditions.** A function may state a caller contract with
+  `VW_REQUIRE(expr)` (alias `VW_ASSUME(expr)`); it is then verified only where
+  `expr` holds, so a bound a caller guarantees does not read as a defect in the
+  leaf. Every such precondition is surfaced with the result — the workbench
+  shows a **Proved assuming** panel and the report prints it — so a conditional
+  proof is never mistaken for an unconditional one; a precondition that can
+  never hold is flagged vacuous. The repair loop treats them as fixed: a patch
+  may not weaken, add, or drop one.
 
 ## Verified repair
 
@@ -176,6 +184,10 @@ harnesses over real flight code from NASA's
 - **`lc_watch_result_bounds.c`** proves an indexed write to the Limit Checker's
   watchpoint results table (real entry type, real table size) stays in bounds
   under LC's guard, and refutes the off-by-one variant at one past the end.
+- **`lc_watch_result_contract.c`** is that same write in LC's real *unguarded*
+  leaf: proved in bounds under the precondition
+  `VW_REQUIRE(WatchIndex < LC_MAX_WATCHPOINTS)`, and refuted without it. It shows
+  a caller contract turning a false alarm into an honest, conditional proof.
 
 Each sample carries the engine settings and check set that make its point. The
 `CFE_TIME` proofs run with overflow checks **off**, because cFS time wraps

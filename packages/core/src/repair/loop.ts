@@ -9,6 +9,7 @@ import type {
   RepairResult,
   VerifyResult,
 } from '@verifier/shared';
+import { expandContracts } from '../contracts';
 import { safeFileName } from '../source';
 import {
   RequestError,
@@ -232,8 +233,10 @@ export async function repair(
     emit({ type: 'checking', iter, step: 'equivalence' });
     const eq = await checkEquivalence(
       {
-        original: req.code,
-        candidate: code,
+        // Preconditions become the engine's assume in the equivalence build too,
+        // so the proof holds only where the caller's contract does.
+        original: expandContracts(req.code, 'cbmc'),
+        candidate: expandContracts(code, 'cbmc'),
         fileName,
         checks: c.checks,
         unwind: c.bounds.unwind,

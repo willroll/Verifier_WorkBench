@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   DEFAULT_CHECKS,
+  type Assumption,
   type CheckId,
   type Counts,
   type EngineId,
@@ -16,6 +17,7 @@ import {
   type VerifyResult,
 } from '@verifier/shared';
 import type { CoreConfig } from './config';
+import { expandContracts, isTriviallyFalse, parseContracts } from './contracts';
 import { ENGINE_LABELS, SOLVER_LABELS, type EngineDetector } from './detect';
 import { cbmc } from './engines/cbmc';
 import { esbmc } from './engines/esbmc';
@@ -142,6 +144,23 @@ function baseResult(r: Resolved, started: number): VerifyResult {
   };
 }
 
+/**
+ * The preconditions the source states, each attributed to the function whose
+ * body holds it (the last one starting at or before its line). A precondition
+ * that can never hold is flagged vacuous: proofs under it mean nothing.
+ */
+function assumptionsFor(code: string, functions: FunctionSummary[]): Assumption[] {
+  const byLine = [...functions].sort((a, b) => a.line - b.line);
+  return parseContracts(code).map((p) => {
+    let fn: string | undefined;
+    for (const f of byLine) if (f.line <= p.line) fn = f.name;
+    const a: Assumption = { expr: p.expr, line: p.line };
+    if (fn) a.function = fn;
+    if (isTriviallyFalse(p.expr)) a.vacuous = true;
+    return a;
+  });
+}
+
 /** Obligations a failed or timed-out run could not decide. */
 function undecided(fn: FunctionInfo, reason: 'timeout' | 'error'): Finding[] {
   return fn.obligations.map((ob) => ({
@@ -236,7 +255,8 @@ export async function verifyDetailed(
     const ctx: RunContext = {
       dir,
       fileName: r.fileName,
-      code: req.code,
+      // Preconditions become the engine's assume builtin; line numbers are kept.
+      code: expandContracts(req.code, r.engine),
       checks: r.checks,
       unwind: r.unwind,
       solver: r.solver,
@@ -244,7 +264,7 @@ export async function verifyDetailed(
       runner: deps.runner,
       log: [],
     };
-    await fs.writeFile(path.join(dir, r.fileName), req.code);
+    await fs.writeFile(path.join(dir, r.fileName), ctx.code);
     const adapter = ADAPTERS[r.engine];
 
     let analysis: Analysis;
@@ -331,6 +351,7 @@ export async function verifyDetailed(
     else if (counts.inconclusive || checked.some((f) => f.status === 'error')) status = 'inconclusive';
     else status = 'proved';
 
+    const assumptions = assumptionsFor(req.code, functions);
     const result: VerifyResult = {
       ...base(),
       status,
@@ -340,6 +361,7 @@ export async function verifyDetailed(
       solver: solverUsed(r, seen),
       diagnostics: analysis.diagnostics,
       durationMs: Date.now() - started,
+      ...(assumptions.length ? { assumptions } : {}),
       raw: joinLog(ctx.log),
     };
     if (status === 'error' || status === 'timeout')
@@ -368,7 +390,7 @@ export async function exportSmtlib(req: SmtlibRequest, deps: VerifierDeps): Prom
     const ctx: RunContext = {
       dir,
       fileName: r.fileName,
-      code: req.code,
+      code: expandContracts(req.code, r.engine),
       checks: r.checks,
       unwind: r.unwind,
       solver: r.solver,
@@ -376,7 +398,7 @@ export async function exportSmtlib(req: SmtlibRequest, deps: VerifierDeps): Prom
       runner: deps.runner,
       log: [],
     };
-    await fs.writeFile(path.join(dir, r.fileName), req.code);
+    await fs.writeFile(path.join(dir, r.fileName), ctx.code);
     const adapter = ADAPTERS[r.engine];
     let analysis: Analysis;
     try {
