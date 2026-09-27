@@ -165,14 +165,20 @@ harnesses over real flight code from NASA's
 [Core Flight System](https://github.com/nasa/cFE) (cFS, Apache-2.0), in
 [`examples/cfs`](examples/cfs):
 
-- **`cfe_time_add.c`** proves that `CFE_TIME_Add`'s hand-written carry equals a
-  single 64-bit addition, for every pair of times.
+- **`cfe_time_add.c`** / **`cfe_time_subtract.c`** prove that `CFE_TIME_Add` and
+  `CFE_TIME_Subtract`'s hand-written carry/borrow equal a single 64-bit
+  addition/subtraction, for every pair of times.
 - **`cfe_time_compare.c`** refutes a natural-looking spec about `CFE_TIME_Compare`
   with a concrete witness that exposes its deliberate ~68-year clock rollover,
   while proving the function's two internal subtractions safe.
+- **`cfe_time_compare_order.c`** proves `CFE_TIME_Compare` is a consistent order
+  (A after B iff B before A), rollover included.
+- **`lc_watch_result_bounds.c`** proves an indexed write to the Limit Checker's
+  watchpoint results table (real entry type, real table size) stays in bounds
+  under LC's guard, and refutes the off-by-one variant at one past the end.
 
 Each sample carries the engine settings and check set that make its point. The
-`CFE_TIME_Add` proof runs with overflow checks **off**, because cFS time wraps
+`CFE_TIME` proofs run with overflow checks **off**, because cFS time wraps
 unsigned by contract — the menu says so when it loads, so a proof or
 counterexample is never misread. See [`examples/cfs/README.md`](examples/cfs/README.md)
 for how to run them from the CLI checker, and [`examples/cfs/NOTICE`](examples/cfs/NOTICE)
